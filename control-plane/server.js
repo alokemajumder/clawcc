@@ -112,10 +112,11 @@ const auth = {
   recordStepUp(token) {
     return authManager.stepUpAuth(token);
   },
-  changePassword(dataDir, username, newPassword) {
-    // Re-create user with new password (simplified)
-    const user = authManager.getUser(username);
-    if (!user) throw new Error('User not found');
+  changePassword(username, oldPassword, newPassword) {
+    return authManager.changePassword(username, oldPassword, newPassword);
+  },
+  updatePassword(username, newPassword) {
+    return authManager.updatePassword(username, newPassword);
   },
   loadUsers(dataDir) {
     return authManager.listUsers();
@@ -241,11 +242,21 @@ events.subscribe({ type: 'tripwire.triggered' }, (event) => {
     detail: JSON.stringify({ tripwireId: event.payload?.tripwireId, nodeId, sessionId }) });
 });
 
-// Auto-rollback: track canary deployments and error rates
+// Auto-rollback: track canary deployments and error rates (capped at 100 entries)
+const CANARY_MAX = 100;
 const canaryDeployments = new Map(); // skillId -> { deployedAt, nodeIds, errorCount }
 events.subscribe({ type: 'skill.deployed' }, (event) => {
   if (event.payload?.canary) {
-    canaryDeployments.set(event.payload.skillId, { deployedAt: Date.now(), errorCount: 0 });
+    // Evict expired entries before adding
+    if (canaryDeployments.size >= CANARY_MAX) {
+      const now = Date.now();
+      for (const [sid, info] of canaryDeployments) {
+        if (now - info.deployedAt > 600000) canaryDeployments.delete(sid);
+      }
+    }
+    if (canaryDeployments.size < CANARY_MAX) {
+      canaryDeployments.set(event.payload.skillId, { deployedAt: Date.now(), errorCount: 0 });
+    }
   }
 });
 events.subscribe({}, (event) => {
@@ -325,10 +336,11 @@ function serveStatic(req, res) {
     filePath = path.join(__dirname, '..', 'ui', urlPath);
   }
 
-  // Prevent path traversal
-  const uiDir = path.resolve(__dirname, '..', 'ui');
-  const pocketDir = path.resolve(__dirname, '..', 'pocket');
-  const resolved = path.resolve(filePath);
+  // Prevent path traversal (resolve symlinks to prevent bypass via /tmp -> /private/tmp etc)
+  const uiDir = fs.realpathSync(path.resolve(__dirname, '..', 'ui'));
+  const pocketDir = fs.realpathSync(path.resolve(__dirname, '..', 'pocket'));
+  let resolved;
+  try { resolved = fs.realpathSync(path.resolve(filePath)); } catch { resolved = path.resolve(filePath); }
   if (!resolved.startsWith(uiDir) && !resolved.startsWith(pocketDir)) {
     res.writeHead(403);
     res.end('Forbidden');
@@ -372,10 +384,30 @@ const globalRateLimit = rateLimiter(
   (config.security && config.security.rateLimitMaxRequests) || 100
 );
 
+// Request timeout (30s default, configurable)
+const REQUEST_TIMEOUT_MS = (config.security && config.security.requestTimeoutMs) || 30000;
+
 // Request handler
 async function handleRequest(req, res) {
+  // Request timeout - prevents hanging connections
+  const timeout = setTimeout(() => {
+    if (!res.headersSent) {
+      res.writeHead(408, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: false, error: 'Request timeout' }));
+    }
+  }, REQUEST_TIMEOUT_MS);
+  res.on('finish', () => clearTimeout(timeout));
+  res.on('close', () => clearTimeout(timeout));
+
   // Security headers
   securityHeaders(req, res, config.httpsEnabled);
+
+  // Unauthenticated health check for load balancers / k8s probes
+  if (req.url === '/healthz' || req.url === '/api/healthz') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ status: 'ok', uptime: process.uptime() }));
+    return;
+  }
 
   // Rate limiting
   const rateResult = globalRateLimit(req);
@@ -416,6 +448,9 @@ try {
   console.log('Snapshot rebuild skipped:', err.message);
 }
 
+// Track open connections for graceful shutdown
+const openConnections = new Set();
+
 // Start server
 const server = config.httpsEnabled
   ? https.createServer({
@@ -423,6 +458,15 @@ const server = config.httpsEnabled
       cert: fs.readFileSync(config.httpsCertPath)
     }, handleRequest)
   : http.createServer(handleRequest);
+
+server.on('connection', (conn) => {
+  openConnections.add(conn);
+  conn.on('close', () => openConnections.delete(conn));
+});
+
+// Set server-level keep-alive timeout
+server.keepAliveTimeout = 65000;
+server.headersTimeout = 66000;
 
 server.listen(config.port, config.host, () => {
   const proto = config.httpsEnabled ? 'https' : 'http';
@@ -443,16 +487,41 @@ setInterval(() => {
 }, snapshotInterval);
 
 // Graceful shutdown
+let shuttingDown = false;
 function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
   console.log('\nReceived ' + signal + ' - shutting down...');
   // Flush any pending snapshot writes
   try { index.flushSnapshots(); } catch { /* ignore */ }
+  // Stop accepting new connections
   server.close(() => {
     console.log('Server closed.');
     process.exit(0);
   });
+  // Destroy lingering connections after grace period
+  setTimeout(() => {
+    for (const conn of openConnections) {
+      try { conn.destroy(); } catch {}
+    }
+  }, 3000);
   setTimeout(() => process.exit(1), 5000);
 }
 
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT', () => shutdown('SIGINT'));
+
+// Uncaught exception / rejection handlers - log and keep running for non-fatal errors
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught exception:', err);
+  auditMod.log({ actor: 'system', action: 'process.uncaughtException', target: 'control-plane', detail: String(err.message || err) });
+  // Fatal errors: exit after flushing
+  if (err.code === 'ERR_OUT_OF_RANGE' || err.code === 'ERR_BUFFER_OUT_OF_BOUNDS') {
+    shutdown('uncaughtException');
+  }
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled rejection:', reason);
+  auditMod.log({ actor: 'system', action: 'process.unhandledRejection', target: 'control-plane', detail: String(reason) });
+});

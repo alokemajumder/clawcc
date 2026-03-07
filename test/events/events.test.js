@@ -187,11 +187,13 @@ describe('JSONL file format', () => {
     if (tmpDir) fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it('should write events as JSONL', () => {
+  it('should write events as JSONL', async () => {
     tmpDir = makeTmpDir();
     const store = createEventStore({ dataDir: tmpDir });
     store.ingest(makeEvent({ type: 'evt1' }));
     store.ingest(makeEvent({ type: 'evt2' }));
+    // Writes are async via queue; wait for drain
+    await new Promise(resolve => setTimeout(resolve, 100));
     const files = fs.readdirSync(tmpDir);
     assert.ok(files.length > 0);
     assert.ok(files[0].endsWith('.jsonl'));

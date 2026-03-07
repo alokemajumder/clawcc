@@ -191,7 +191,8 @@ function registerOpsRoutes(router, config, modules) {
     const logPath = logPaths[source];
     if (!logPath) return res.json(200, { success: true, logs: [] });
     try {
-      const content = execSync(`tail -n ${Math.min(lines, 1000)} "${logPath}" 2>/dev/null`, { timeout: 5000, encoding: 'utf8' });
+      const safeLine = Math.min(Math.max(1, lines), 1000);
+      const content = execSync('tail -n ' + safeLine + ' ' + JSON.stringify(logPath) + ' 2>/dev/null', { timeout: 5000, encoding: 'utf8' });
       res.json(200, { success: true, logs: content.split('\n').filter(Boolean) });
     } catch {
       res.json(200, { success: true, logs: [] });
@@ -245,8 +246,9 @@ function registerOpsRoutes(router, config, modules) {
     });
   });
 
-  // Push notification subscriptions (in-memory store)
+  // Push notification subscriptions (in-memory store, capped)
   const pushSubscriptions = [];
+  const PUSH_SUBS_MAX = 1000;
 
   router.post('/api/ops/notifications/subscribe', async (req, res) => {
     const authResult = authenticate(req, auth);
@@ -256,7 +258,8 @@ function registerOpsRoutes(router, config, modules) {
     // Store subscription (deduplicate by endpoint)
     const existing = pushSubscriptions.findIndex(s => s.endpoint === body.endpoint);
     if (existing >= 0) pushSubscriptions[existing] = body;
-    else pushSubscriptions.push(body);
+    else if (pushSubscriptions.length < PUSH_SUBS_MAX) pushSubscriptions.push(body);
+    else return res.error(429, 'Subscription limit reached');
     res.json(200, { success: true, subscribed: true });
   });
 

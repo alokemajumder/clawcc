@@ -186,10 +186,28 @@ function createAuthManager(opts = {}) {
     return [...users.values()].map(u => ({ username: u.username, role: u.role, mfaEnabled: u.mfaEnabled }));
   }
 
+  function changePassword(username, oldPassword, newPassword) {
+    const user = users.get(username);
+    if (!user) throw new Error('User not found');
+    if (!verifyPassword(oldPassword, user.password)) {
+      throw new Error('Invalid old password');
+    }
+    user.password = hashPassword(newPassword);
+    persistUsers();
+  }
+
+  function updatePassword(username, newPassword) {
+    const user = users.get(username);
+    if (!user) throw new Error('User not found');
+    user.password = hashPassword(newPassword);
+    persistUsers();
+  }
+
   return {
     createUser, authenticate, createSession, validateSession, destroySession,
     rotateSession, checkPermission, setupMFA, verifyMFA,
-    stepUpAuth, requireStepUp, createDefaultAdmin, getUser, listUsers
+    stepUpAuth, requireStepUp, createDefaultAdmin, getUser, listUsers,
+    changePassword, updatePassword
   };
 }
 

@@ -66,14 +66,20 @@ function sanitizePath(inputPath, allowedRoots) {
     const home = process.env.HOME || process.env.USERPROFILE || '/tmp';
     const expanded = inputPath.replace(/^~/, home);
     const resolved = path.resolve(expanded);
-    const normalizedRoots = allowedRoots.map(r => path.resolve(r.replace(/^~/, home)));
+    // Resolve symlinks to prevent bypass (e.g., /tmp -> /private/tmp on macOS)
+    let realResolved;
+    try { realResolved = fs.realpathSync(resolved); } catch { realResolved = resolved; }
+    const normalizedRoots = allowedRoots.map(r => {
+      const rp = path.resolve(r.replace(/^~/, home));
+      try { return fs.realpathSync(rp); } catch { return rp; }
+    });
 
     for (const root of normalizedRoots) {
-      if (resolved.startsWith(root + path.sep) || resolved === root) {
-        return { safe: true, resolved };
+      if (realResolved.startsWith(root + path.sep) || realResolved === root) {
+        return { safe: true, resolved: realResolved };
       }
     }
-    return { safe: false, resolved };
+    return { safe: false, resolved: realResolved };
   } catch {
     return { safe: false, resolved: '' };
   }

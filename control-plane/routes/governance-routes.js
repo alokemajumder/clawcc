@@ -9,8 +9,9 @@ const { buildZip } = require('../lib/zip');
 function registerGovernanceRoutes(router, config, modules) {
   const { auth, audit, events, index, snapshots, receipts, policy, intent, crypto: cryptoMod } = modules;
 
-  // In-memory approval store for 4-eyes workflow
+  // In-memory approval store for 4-eyes workflow (capped, expired entries evicted)
   const approvalRequests = new Map();
+  const APPROVAL_MAX = 1000;
 
   const policiesDir = path.join(config.dataDir, '..', 'policies');
 
@@ -79,6 +80,13 @@ function registerGovernanceRoutes(router, config, modules) {
       status: 'pending',
       expiresAt: Date.now() + (body.expiresInMs || 3600000)
     };
+    // Evict expired approvals if at capacity
+    if (approvalRequests.size >= APPROVAL_MAX) {
+      const now = Date.now();
+      for (const [id, r] of approvalRequests) {
+        if (r.status !== 'pending' || now >= r.expiresAt) approvalRequests.delete(id);
+      }
+    }
     approvalRequests.set(approvalId, request);
     events.ingest({ ts: request.requestedAt, nodeId: null, sessionId: null, type: 'approval.requested', severity: 'info',
       payload: { approvalId, action: body.action, target: body.target, requestedBy: authResult.user.username } });

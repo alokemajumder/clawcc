@@ -17,6 +17,26 @@ function createEventStore(opts = {}) {
   const subscribers = new Set();
   const dataDir = opts.dataDir || null;
   const maxPayloadSize = opts.maxPayloadSize || MAX_PAYLOAD_SIZE;
+  const maxInMemory = opts.maxInMemory || 500000;
+
+  // Serialized write queue to prevent JSONL corruption under concurrent writes
+  const writeQueue = [];
+  let writing = false;
+
+  function drainWriteQueue() {
+    if (writing || writeQueue.length === 0) return;
+    writing = true;
+    const { filePath, line } = writeQueue.shift();
+    fs.appendFile(filePath, line, () => {
+      writing = false;
+      drainWriteQueue();
+    });
+  }
+
+  function enqueueWrite(filePath, line) {
+    writeQueue.push({ filePath, line });
+    drainWriteQueue();
+  }
 
   function redactSecrets(payload) {
     if (typeof payload !== 'string') payload = JSON.stringify(payload);
@@ -51,16 +71,21 @@ function createEventStore(opts = {}) {
     stored.receivedAt = Date.now();
     events.push(stored);
 
+    // Evict oldest in-memory events when cap is exceeded (persisted events remain on disk)
+    while (events.length > maxInMemory) {
+      events.shift();
+    }
+
     // Notify subscribers
     for (const cb of subscribers) {
       try { cb(stored); } catch {}
     }
 
-    // Persist to JSONL
+    // Persist to JSONL via serialized write queue
     if (dataDir) {
       const dateStr = new Date(stored.receivedAt).toISOString().split('T')[0];
       const filePath = path.join(dataDir, `events-${dateStr}.jsonl`);
-      fs.appendFileSync(filePath, JSON.stringify(stored) + '\n');
+      enqueueWrite(filePath, JSON.stringify(stored) + '\n');
     }
 
     return stored;

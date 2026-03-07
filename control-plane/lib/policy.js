@@ -2,8 +2,25 @@
 
 // ── Policy engine ──
 
+const MAX_REGEX_PATTERN_LENGTH = 200;
+const DANGEROUS_REGEX = /(\{[^}]*\{|\+\+|\*\*|\+\*|\*\+|\(\?[^)]*\(|\([^)]*\+[^)]*\)\+|\([^)]*\*[^)]*\)\*|\([^)]*\+[^)]*\)\*|\([^)]*\*[^)]*\)\+)/;
+
+function compileRegex(pattern, cache) {
+  if (cache.has(pattern)) return cache.get(pattern);
+  if (typeof pattern !== 'string' || pattern.length > MAX_REGEX_PATTERN_LENGTH) {
+    throw new Error(`Regex pattern exceeds ${MAX_REGEX_PATTERN_LENGTH} character limit or is not a string`);
+  }
+  if (DANGEROUS_REGEX.test(pattern)) {
+    throw new Error('Regex pattern contains potentially dangerous constructs (nested quantifiers)');
+  }
+  const re = new RegExp(pattern);
+  cache.set(pattern, re);
+  return re;
+}
+
 function createPolicyEngine() {
   const policies = new Map();
+  const regexCache = new Map();
 
   function loadPolicy(policyData) {
     if (!policyData.id || !policyData.name) throw new Error('Policy must have id and name');
@@ -92,7 +109,14 @@ function createPolicyEngine() {
       case 'gte': return fieldValue >= rule.value;
       case 'lt': return fieldValue < rule.value;
       case 'lte': return fieldValue <= rule.value;
-      case 'matches': return new RegExp(rule.value).test(String(fieldValue));
+      case 'matches': {
+        try {
+          const re = compileRegex(rule.value, regexCache);
+          return re.test(String(fieldValue));
+        } catch (_) {
+          return false;
+        }
+      }
       case 'contains': return String(fieldValue).includes(rule.value);
       default: return false;
     }

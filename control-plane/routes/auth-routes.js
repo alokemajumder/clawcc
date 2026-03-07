@@ -17,6 +17,12 @@ function registerAuthRoutes(router, config, modules) {
       authRateLimit.set(ip, entry);
     }
     entry.count++;
+    // Evict expired entries if map grows too large
+    if (authRateLimit.size > 10000) {
+      for (const [k, v] of authRateLimit) {
+        if (now - v.windowStart > windowMs) authRateLimit.delete(k);
+      }
+    }
     return entry.count <= max;
   }
 
@@ -97,9 +103,11 @@ function registerAuthRoutes(router, config, modules) {
     const body = await parseBody(req);
     if (!body.oldPassword || !body.newPassword) return res.error(400, 'Old and new passwords required');
     if (body.newPassword.length < 8) return res.error(400, 'Password must be at least 8 characters');
-    const verifyResult = auth.authenticateUser(config.dataDir, authResult.user.username, body.oldPassword);
-    if (!verifyResult.success) return res.error(401, 'Current password incorrect');
-    auth.changePassword(config.dataDir, authResult.user.username, body.newPassword);
+    try {
+      auth.changePassword(authResult.user.username, body.oldPassword, body.newPassword);
+    } catch (e) {
+      return res.error(401, e.message === 'Invalid old password' ? 'Current password incorrect' : e.message);
+    }
     audit.log({ actor: authResult.user.username, action: 'auth.password.changed', target: authResult.user.username });
     res.json(200, { success: true });
   });

@@ -6,7 +6,13 @@ function registerEventRoutes(router, config, modules) {
   const { auth, events, index, snapshots, receipts } = modules;
 
   router.post('/api/events/ingest', async (req, res) => {
-    const body = await parseBody(req);
+    let body;
+    try { body = await parseBody(req); } catch (err) { return res.error(400, err.message); }
+    // Input validation
+    if (!body || typeof body !== 'object') return res.error(400, 'Request body must be a JSON object');
+    if (body.type && typeof body.type !== 'string') return res.error(400, 'type must be a string');
+    if (body.severity && typeof body.severity !== 'string') return res.error(400, 'severity must be a string');
+    if (body.nodeId && typeof body.nodeId !== 'string') return res.error(400, 'nodeId must be a string');
     try {
       events.ingest(body);
       snapshots.update(config.dataDir, body);
@@ -41,13 +47,21 @@ function registerEventRoutes(router, config, modules) {
     });
 
     const keepalive = setInterval(() => {
-      try { res.write(':keepalive\n\n'); } catch {}
+      try { res.write(':keepalive\n\n'); } catch { cleanup(); }
     }, 30000);
 
-    req.on('close', () => {
+    // Max SSE connection lifetime: 1 hour (reconnect expected)
+    const maxLifetime = setTimeout(() => { cleanup(); }, 3600000);
+
+    function cleanup() {
       unsubscribe();
       clearInterval(keepalive);
-    });
+      clearTimeout(maxLifetime);
+      try { res.end(); } catch {}
+    }
+
+    req.on('close', cleanup);
+    req.on('error', cleanup);
   });
 
   router.get('/api/events/query', async (req, res) => {

@@ -7,6 +7,7 @@ const { authenticate, verifyNodeSignature } = require('../middleware/auth-middle
 function registerFleetRoutes(router, config, modules) {
   const { auth, audit, events, index, snapshots, crypto: cryptoMod } = modules;
   const pendingCommands = new Map(); // nodeId -> commands[]
+  const PENDING_COMMANDS_MAX = 500; // max total commands across all nodes
 
   function loadFleetNodes() {
     return index ? index.getFleetNodes(config.dataDir) : {};
@@ -101,8 +102,16 @@ function registerFleetRoutes(router, config, modules) {
     const commandId = require('crypto').randomUUID();
     const command = { id: commandId, action: body.action, args: body.args, requestedBy: authResult.user.username, ts: new Date().toISOString() };
     const cmds = pendingCommands.get(req.params.nodeId) || [];
+    // Cap per-node command queue at 50
+    if (cmds.length >= 50) return res.error(429, 'Too many pending commands for this node');
     cmds.push(command);
     pendingCommands.set(req.params.nodeId, cmds);
+    // Evict nodes with no pending commands if map is too large
+    if (pendingCommands.size > PENDING_COMMANDS_MAX) {
+      for (const [nid, ncmds] of pendingCommands) {
+        if (ncmds.length === 0) pendingCommands.delete(nid);
+      }
+    }
     audit.log({ actor: authResult.user.username, action: 'node.action', target: req.params.nodeId, detail: JSON.stringify(body) });
     res.json(200, { success: true, queued: true, commandId });
   });
