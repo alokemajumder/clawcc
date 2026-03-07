@@ -43,26 +43,40 @@ function discoverSessions(configuredPaths) {
   return sessions;
 }
 
+// Redact lines that look like they contain secrets/tokens/keys
+const SECRET_PATTERN = /(?:api[_-]?key|secret|token|password|credential|auth)[\s]*[:=]/i;
+const MAX_CONTENT_SIZE = 64 * 1024; // 64KB per file
+
+function redactContent(content) {
+  if (!content) return content;
+  if (content.length > MAX_CONTENT_SIZE) content = content.slice(0, MAX_CONTENT_SIZE) + '\n[TRUNCATED]';
+  return content.split('\n').map(line =>
+    SECRET_PATTERN.test(line) ? line.replace(/[:=].*/,': [REDACTED]') : line
+  ).join('\n');
+}
+
 function discoverMemory(configuredPaths) {
   const searchPaths = (configuredPaths || ['~/.claude']).map(expandHome);
   const result = { memoryMd: null, heartbeatMd: null, dailyNotes: [] };
+  const maxDailyNotes = 100;
 
   for (const basePath of searchPaths) {
     const memPath = path.join(basePath, 'MEMORY.md');
     const hbPath = path.join(basePath, 'HEARTBEAT.md');
-    try { if (fs.existsSync(memPath)) result.memoryMd = fs.readFileSync(memPath, 'utf8'); } catch {}
-    try { if (fs.existsSync(hbPath)) result.heartbeatMd = fs.readFileSync(hbPath, 'utf8'); } catch {}
+    try { if (fs.existsSync(memPath)) result.memoryMd = redactContent(fs.readFileSync(memPath, 'utf8')); } catch {}
+    try { if (fs.existsSync(hbPath)) result.heartbeatMd = redactContent(fs.readFileSync(hbPath, 'utf8')); } catch {}
 
     try {
       const memoryDir = path.join(basePath, 'memory');
       if (fs.existsSync(memoryDir)) {
         const files = fs.readdirSync(memoryDir).filter(f => f.endsWith('.md'));
         for (const f of files) {
+          if (result.dailyNotes.length >= maxDailyNotes) break;
           try {
             result.dailyNotes.push({
               name: f,
               path: path.join(memoryDir, f),
-              content: fs.readFileSync(path.join(memoryDir, f), 'utf8')
+              content: redactContent(fs.readFileSync(path.join(memoryDir, f), 'utf8'))
             });
           } catch {}
         }
@@ -79,7 +93,11 @@ function discoverGitActivity(repoPath) {
     const status = execSync('git status --porcelain', { cwd, timeout: 5000, encoding: 'utf8' }).trim();
     const branch = execSync('git branch --show-current', { cwd, timeout: 5000, encoding: 'utf8' }).trim();
     let remote = '';
-    try { remote = execSync('git remote get-url origin', { cwd, timeout: 5000, encoding: 'utf8' }).trim(); } catch {}
+    try {
+      remote = execSync('git remote get-url origin', { cwd, timeout: 5000, encoding: 'utf8' }).trim();
+      // Strip embedded credentials from HTTPS URLs (e.g., https://user:token@github.com/...)
+      remote = remote.replace(/\/\/[^@]+@/, '//');
+    } catch {}
 
     return {
       recentCommits: log.split('\n').filter(Boolean),
@@ -101,10 +119,11 @@ function discoverCronJobs() {
     for (let i = 0; i < lines.length; i++) {
       const parts = lines[i].trim().split(/\s+/);
       if (parts.length >= 6) {
+        const command = parts.slice(5).join(' ');
         jobs.push({
           id: 'cron-' + i,
           schedule: parts.slice(0, 5).join(' '),
-          command: parts.slice(5).join(' '),
+          command: SECRET_PATTERN.test(command) ? '[REDACTED]' : command,
           source: 'crontab',
           enabled: true
         });
@@ -139,8 +158,10 @@ function discoverTailscale() {
     const output = execSync('tailscale status --json', { timeout: 10000, encoding: 'utf8' });
     const data = JSON.parse(output);
     const peers = [];
+    const maxPeers = 500;
     if (data.Peer) {
       for (const [key, peer] of Object.entries(data.Peer)) {
+        if (peers.length >= maxPeers) break;
         peers.push({
           id: key,
           hostname: peer.HostName,

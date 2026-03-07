@@ -17,7 +17,11 @@ function registerFleetRoutes(router, config, modules) {
     if (index) return index.saveFleetNodes(config.dataDir, nodes);
     const dir = path.join(config.dataDir, 'fleet');
     fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(path.join(dir, 'nodes.json'), JSON.stringify(nodes, null, 2));
+    const tmpPath = path.join(dir, 'nodes.json.tmp');
+    const finalPath = path.join(dir, 'nodes.json');
+    fs.writeFile(tmpPath, JSON.stringify(nodes, null, 2), (err) => {
+      if (!err) try { fs.renameSync(tmpPath, finalPath); } catch {}
+    });
   }
 
   router.post('/api/fleet/register', async (req, res) => {

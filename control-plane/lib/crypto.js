@@ -151,7 +151,9 @@ function hashRecoveryCode(code) {
 }
 
 function verifyRecoveryCode(code, hash) {
-  return hashRecoveryCode(code) === hash;
+  const computed = hashRecoveryCode(code);
+  if (computed.length !== hash.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(computed, 'hex'), Buffer.from(hash, 'hex'));
 }
 
 // ── Nonce tracker ──

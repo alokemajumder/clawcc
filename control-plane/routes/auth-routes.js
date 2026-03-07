@@ -46,7 +46,7 @@ function registerAuthRoutes(router, config, modules) {
     }
 
     if (result.requiresMfa) {
-      const session = auth.createSession({ ...result.user, mfaPending: true });
+      const session = auth.createSession(result.user, { mfaPending: true });
       res.setCookie('clawcc_session', session.token, { httpOnly: true, secure: config.httpsEnabled, sameSite: 'Lax', path: '/', maxAge: 300 });
       return res.json(200, { success: true, requiresMfa: true });
     }
@@ -58,14 +58,20 @@ function registerAuthRoutes(router, config, modules) {
   });
 
   router.post('/api/auth/mfa/verify', async (req, res) => {
-    const authResult = authenticate(req, auth);
-    if (!authResult.authenticated) return res.error(401, 'Not authenticated');
+    // MFA verify uses raw session validation (allows mfaPending sessions)
+    const token = req.cookies && req.cookies.clawcc_session;
+    if (!token) return res.error(401, 'Not authenticated');
+    const session = auth.validateSession(token);
+    if (!session) return res.error(401, 'Invalid or expired session');
+    if (!session.mfaPending) return res.error(400, 'No MFA verification pending');
     let body;
     try { body = await parseBody(req); } catch (err) { return res.error(400, err.message); }
-    const result = auth.verifyMfaLogin(config.dataDir, authResult.user.username, body.code);
+    const result = auth.verifyMfaLogin(config.dataDir, session.username, body.code);
     if (!result.success) return res.error(401, 'Invalid MFA code');
-    const session = auth.createSession(result.user);
-    res.setCookie('clawcc_session', session.token, { httpOnly: true, secure: config.httpsEnabled, sameSite: 'Lax', path: '/', maxAge: 86400 });
+    // Upgrade session to fully authenticated (clears mfaPending, extends TTL)
+    auth.upgradeSession(token);
+    res.setCookie('clawcc_session', token, { httpOnly: true, secure: config.httpsEnabled, sameSite: 'Lax', path: '/', maxAge: 86400 });
+    audit.log({ actor: session.username, action: 'auth.mfa.verified', target: session.username });
     res.json(200, { success: true });
   });
 
@@ -89,7 +95,7 @@ function registerAuthRoutes(router, config, modules) {
   router.post('/api/auth/logout', async (req, res) => {
     const token = req.cookies && req.cookies.clawcc_session;
     if (token) auth.destroySession(token);
-    res.setCookie('clawcc_session', '', { httpOnly: true, path: '/', maxAge: 0 });
+    res.setCookie('clawcc_session', '', { httpOnly: true, secure: config.httpsEnabled, sameSite: 'Lax', path: '/', maxAge: 0 });
     res.json(200, { success: true });
   });
 

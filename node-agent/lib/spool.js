@@ -5,17 +5,42 @@ const http = require('http');
 const https = require('https');
 const crypto = require('crypto');
 
-function init(spoolDir) {
+function init(spoolDir, options = {}) {
   fs.mkdirSync(spoolDir, { recursive: true });
+  const maxSpoolBytes = options.maxSpoolBytes || 100 * 1024 * 1024; // 100MB default
+  let draining = false;
 
   return {
     spool(event) {
+      // Enforce spool size limit to prevent disk exhaustion
+      try {
+        const files = fs.readdirSync(spoolDir).filter(f => f.endsWith('.jsonl'));
+        let totalBytes = 0;
+        for (const f of files) {
+          totalBytes += fs.statSync(path.join(spoolDir, f)).size;
+        }
+        if (totalBytes >= maxSpoolBytes) {
+          // Drop oldest file to make room
+          const sorted = files.sort();
+          if (sorted.length > 0) {
+            fs.unlinkSync(path.join(spoolDir, sorted[0]));
+          }
+        }
+      } catch { /* best effort */ }
+
       const date = new Date().toISOString().slice(0, 10);
       const filePath = path.join(spoolDir, date + '.jsonl');
       fs.appendFileSync(filePath, JSON.stringify(event) + '\n');
     },
 
     async drain(controlPlaneUrl, nodeSecret) {
+      if (draining) return { sent: 0, failed: 0, remaining: 0, skipped: true };
+      draining = true;
+      try { return await this._doDrain(controlPlaneUrl, nodeSecret); }
+      finally { draining = false; }
+    },
+
+    async _doDrain(controlPlaneUrl, nodeSecret) {
       const files = fs.readdirSync(spoolDir).filter(f => f.endsWith('.jsonl')).sort();
       let sent = 0, failed = 0;
 
@@ -31,13 +56,21 @@ function init(spoolDir) {
             const success = await sendEvent(controlPlaneUrl, event, nodeSecret);
             if (success) sent++;
             else { remaining.push(line); failed++; }
-          } catch { remaining.push(line); failed++; }
+          } catch (err) {
+            // Only re-spool if it's valid JSON that failed to send (network error).
+            // Drop permanently corrupted lines to prevent infinite retry.
+            try { JSON.parse(line); remaining.push(line); } catch { /* corrupted line, discard */ }
+            failed++;
+          }
         }
 
         if (remaining.length === 0) {
           fs.unlinkSync(filePath);
         } else {
-          fs.writeFileSync(filePath, remaining.join('\n') + '\n');
+          // Atomic write: write to temp file then rename to prevent data loss on crash
+          const tmpPath = filePath + '.tmp';
+          fs.writeFileSync(tmpPath, remaining.join('\n') + '\n');
+          fs.renameSync(tmpPath, filePath);
         }
       }
 
@@ -105,7 +138,11 @@ function sendEvent(baseUrl, event, nodeSecret) {
     const client = url.protocol === 'https:' ? https : http;
     const req = client.request(options, (res) => {
       let body = '';
-      res.on('data', c => body += c);
+      const maxResponseBytes = 65536;
+      res.on('data', c => {
+        if (body.length < maxResponseBytes) body += c;
+        else res.destroy(); // discard oversized responses
+      });
       res.on('end', () => resolve(res.statusCode === 200));
     });
     req.on('error', () => resolve(false));

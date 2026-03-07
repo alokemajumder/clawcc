@@ -17,7 +17,8 @@ function collectHealth() {
 
   let disk = { total: 0, used: 0, free: 0, percent: 0 };
   try {
-    const dfOutput = execSync('df -k / 2>/dev/null', { timeout: 5000, encoding: 'utf8' });
+    const { execFileSync } = require('child_process');
+    const dfOutput = execFileSync('df', ['-k', '/'], { timeout: 5000, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
     const lines = dfOutput.trim().split('\n');
     if (lines.length >= 2) {
       const parts = lines[1].split(/\s+/);
@@ -42,7 +43,9 @@ function collectHealth() {
 
 function collectProcessHealth(processName) {
   try {
-    const output = execSync(`pgrep -f "${processName}" 2>/dev/null`, { timeout: 5000, encoding: 'utf8' });
+    const { execFileSync } = require('child_process');
+    // Use execFileSync to avoid shell injection — processName is passed as an argument, not interpolated
+    const output = execFileSync('pgrep', ['-f', processName], { timeout: 5000, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
     const pid = parseInt(output.trim().split('\n')[0], 10);
     if (isNaN(pid)) return null;
     return { pid, running: true };

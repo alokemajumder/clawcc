@@ -22,6 +22,10 @@ function createRouter() {
     return params;
   }
 
+  function safeDecode(val) {
+    try { return decodeURIComponent(val); } catch { return val; }
+  }
+
   function parseCookies(header) {
     const cookies = {};
     if (!header) return cookies;
@@ -30,7 +34,7 @@ function createRouter() {
       if (idx > 0) {
         const key = pair.substring(0, idx).trim();
         const val = pair.substring(idx + 1).trim();
-        cookies[key] = decodeURIComponent(val);
+        cookies[key] = safeDecode(val);
       }
     });
     return cookies;
@@ -83,7 +87,7 @@ function createRouter() {
         const match = pathname.match(route.regex);
         if (match) {
           route.paramNames.forEach((name, i) => {
-            req.params[name] = decodeURIComponent(match[i + 1]);
+            req.params[name] = safeDecode(match[i + 1]);
           });
           try {
             await route.handler(req, res);

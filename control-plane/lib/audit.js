@@ -6,6 +6,7 @@ const crypto = require('crypto');
 
 let lastHash = '0'.repeat(64);
 let seq = 0;
+const ensuredDirs = new Set();
 
 function init(dataDir) {
   const auditDir = path.join(dataDir, 'audit');
@@ -26,7 +27,10 @@ function init(dataDir) {
 
 function log(entry) {
   const auditDir = entry._auditDir || path.join(process.cwd(), 'data', 'audit');
-  fs.mkdirSync(auditDir, { recursive: true });
+  if (!ensuredDirs.has(auditDir)) {
+    fs.mkdirSync(auditDir, { recursive: true });
+    ensuredDirs.add(auditDir);
+  }
 
   const record = {
     ts: new Date().toISOString(),
@@ -51,7 +55,9 @@ function log(entry) {
   const date = record.ts.slice(0, 10);
   const filePath = path.join(auditDir, date + '.jsonl');
   delete record._auditDir;
-  fs.appendFileSync(filePath, JSON.stringify(record) + '\n', { flag: 'a' });
+  fs.appendFile(filePath, JSON.stringify(record) + '\n', { flag: 'a' }, (err) => {
+    if (err) console.error('Audit write error:', err.message);
+  });
 
   return record;
 }
@@ -81,7 +87,7 @@ function query(dataDir, filters) {
   filters = filters || {};
   const auditDir = path.join(dataDir, 'audit');
   const entries = [];
-  const limit = filters.limit || 100;
+  const limit = Math.min(filters.limit || 100, 10000);
 
   try {
     const files = fs.readdirSync(auditDir).filter(f => f.endsWith('.jsonl')).sort().reverse();

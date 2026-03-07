@@ -27,6 +27,7 @@ function createIndex() {
   const dailyCounts = new Map();   // 'YYYY-MM-DD' -> count
   const hourlyUsage = [];          // ring buffer of { ts, cost, inputTokens, outputTokens, provider, model }
   const HOURLY_USAGE_MAX = 100000; // cap ring buffer
+  const ALL_EVENTS_MAX = 500000;   // cap in-memory events to prevent OOM
 
   // --- Entity caches ---
   let fleetCache = null;           // { nodes: {}, lastLoaded: timestamp }
@@ -42,6 +43,24 @@ function createIndex() {
    * Index a single event (called on ingest and during rebuild)
    */
   function indexEvent(event) {
+    // Evict oldest events when at capacity to prevent OOM
+    if (allEvents.length >= ALL_EVENTS_MAX) {
+      const evictCount = Math.floor(ALL_EVENTS_MAX * 0.1);
+      allEvents.splice(0, evictCount);
+      // Rebuild secondary indexes after eviction (indexes store array positions)
+      bySessionId.clear();
+      byNodeId.clear();
+      byType.clear();
+      byDate.clear();
+      for (let i = 0; i < allEvents.length; i++) {
+        const e = allEvents[i];
+        if (e.sessionId) { if (!bySessionId.has(e.sessionId)) bySessionId.set(e.sessionId, []); bySessionId.get(e.sessionId).push(i); }
+        if (e.nodeId) { if (!byNodeId.has(e.nodeId)) byNodeId.set(e.nodeId, []); byNodeId.get(e.nodeId).push(i); }
+        if (e.type) { if (!byType.has(e.type)) byType.set(e.type, []); byType.get(e.type).push(i); }
+        const d = (e.ts || e.timestamp || '').slice(0, 10);
+        if (d) { if (!byDate.has(d)) byDate.set(d, []); byDate.get(d).push(i); }
+      }
+    }
     const idx = allEvents.length;
     allEvents.push(event);
 

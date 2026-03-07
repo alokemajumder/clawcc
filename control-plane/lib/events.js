@@ -24,20 +24,33 @@ function createEventStore(opts = {}) {
   const maxWriteQueue = opts.maxWriteQueue || 10000;
   let writing = false;
 
+  let droppedWrites = 0;
+
   function drainWriteQueue() {
     if (writing || writeQueue.length === 0) return;
     writing = true;
     const { filePath, line } = writeQueue.shift();
-    fs.appendFile(filePath, line, () => {
+    fs.appendFile(filePath, line, (err) => {
+      if (err) console.error('Event write error:', err.message, 'file:', filePath);
       writing = false;
       drainWriteQueue();
     });
   }
 
   function enqueueWrite(filePath, line) {
-    if (writeQueue.length >= maxWriteQueue) return; // backpressure: drop oldest writes
+    if (writeQueue.length >= maxWriteQueue) {
+      droppedWrites++;
+      if (droppedWrites % 100 === 1) {
+        console.error('[BACKPRESSURE] Event write queue full (' + maxWriteQueue + '), dropped ' + droppedWrites + ' writes total');
+      }
+      return;
+    }
     writeQueue.push({ filePath, line });
     drainWriteQueue();
+  }
+
+  function getWriteQueueStats() {
+    return { queued: writeQueue.length, dropped: droppedWrites, writing };
   }
 
   function redactSecrets(payload) {
@@ -122,7 +135,7 @@ function createEventStore(opts = {}) {
 
   function getAll() { return [...events]; }
 
-  return { ingest, subscribe, query, getAll, redactSecrets };
+  return { ingest, subscribe, query, getAll, redactSecrets, getWriteQueueStats };
 }
 
 module.exports = { createEventStore, REQUIRED_FIELDS, VALID_SEVERITIES };

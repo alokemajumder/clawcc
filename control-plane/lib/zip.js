@@ -18,13 +18,18 @@ function crc32(buf) {
 }
 
 function buildZip(files) {
+  if (files.length > 65535) throw new Error('ZIP format supports at most 65535 entries');
+
   const localHeaders = [];
   const centralEntries = [];
   let offset = 0;
 
-  for (const file of files) {
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    if (!file.name || file.data == null) throw new Error(`ZIP entry ${i}: name and data are required`);
     const name = Buffer.from(file.name, 'utf8');
-    const data = Buffer.isBuffer(file.data) ? file.data : Buffer.from(file.data);
+    const data = Buffer.isBuffer(file.data) ? file.data : Buffer.from(String(file.data));
+    if (data.length > 0xFFFFFFFF) throw new Error(`ZIP entry "${file.name}": data exceeds 4GB limit`);
     const compressed = zlib.deflateRawSync(data);
     const crc = crc32(data);
 

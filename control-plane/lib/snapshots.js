@@ -7,6 +7,21 @@ function ensureDir(dir) {
   fs.mkdirSync(dir, { recursive: true });
 }
 
+const MAX_SESSIONS = 50000; // cap in-memory sessions to prevent OOM
+const SESSION_EVICT_AGE_MS = 30 * 24 * 60 * 60 * 1000; // evict sessions older than 30 days
+
+function evictOldSessions(sessions) {
+  const keys = Object.keys(sessions);
+  if (keys.length <= MAX_SESSIONS) return;
+  const cutoff = new Date(Date.now() - SESSION_EVICT_AGE_MS).toISOString();
+  for (const key of keys) {
+    if (sessions[key].status === 'ended' && sessions[key].lastActivity < cutoff) {
+      delete sessions[key];
+    }
+    if (Object.keys(sessions).length <= MAX_SESSIONS) break;
+  }
+}
+
 function rebuild(dataDir) {
   const eventsDir = path.join(dataDir, 'events');
   const snapshotsDir = path.join(dataDir, 'snapshots');
@@ -35,6 +50,8 @@ function rebuild(dataDir) {
       }
     }
   } catch { /* no events yet */ }
+
+  evictOldSessions(sessions);
 
   for (const nodeId of nodeSet) {
     topology.nodes.push({ id: nodeId, type: 'node', label: nodeId, status: health.nodes[nodeId] ? health.nodes[nodeId].status : 'unknown' });
@@ -180,7 +197,8 @@ function update(dataDir, event) {
   const toolSet = new Set(data.topology.nodes.filter(n => n.type === 'tool').map(n => n.label));
   const edgeMap = new Map(data.topology.edges.map(e => [e.source + '->' + e.target, e]));
 
-  processEvent(event, data.sessions.sessions || data.sessions, data.usage, data.health, nodeSet, toolSet, edgeMap);
+  const sessionsObj = (data.sessions && data.sessions.sessions) ? data.sessions.sessions : (data.sessions || {});
+  processEvent(event, sessionsObj, data.usage, data.health, nodeSet, toolSet, edgeMap);
 
   // Only write changed snapshots based on event type
   const eventTypeToSnap = {

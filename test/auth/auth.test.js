@@ -220,3 +220,99 @@ describe('Default admin', () => {
     assert.equal(result.username, 'admin');
   });
 });
+
+describe('Recovery codes', () => {
+  let auth;
+  beforeEach(() => {
+    auth = createAuthManager();
+    auth.createUser('alice', 'pass', 'admin');
+  });
+
+  it('should use a valid recovery code', () => {
+    const { recoveryCodes } = auth.setupMFA('alice');
+    assert.ok(recoveryCodes.length > 0);
+    const result = auth.useRecoveryCode('alice', recoveryCodes[0]);
+    assert.equal(result, true);
+  });
+
+  it('should reject an already-used recovery code', () => {
+    const { recoveryCodes } = auth.setupMFA('alice');
+    const code = recoveryCodes[0];
+    const first = auth.useRecoveryCode('alice', code);
+    assert.equal(first, true);
+    const second = auth.useRecoveryCode('alice', code);
+    assert.equal(second, false);
+  });
+
+  it('should reject invalid recovery code', () => {
+    auth.setupMFA('alice');
+    const result = auth.useRecoveryCode('alice', 'INVALID-CODE-9999');
+    assert.equal(result, false);
+  });
+});
+
+describe('Password management', () => {
+  let auth;
+  beforeEach(() => {
+    auth = createAuthManager();
+    auth.createUser('alice', 'oldpass', 'operator');
+  });
+
+  it('should change password with correct old password', () => {
+    auth.changePassword('alice', 'oldpass', 'newpass');
+    // New password should work
+    const result = auth.authenticate('alice', 'newpass');
+    assert.equal(result.username, 'alice');
+  });
+
+  it('should reject change with wrong old password', () => {
+    assert.throws(() => auth.changePassword('alice', 'wrongpass', 'newpass'), /Invalid old password/);
+    // Old password should still work
+    const result = auth.authenticate('alice', 'oldpass');
+    assert.equal(result.username, 'alice');
+  });
+
+  it('should update password (admin reset, no old password needed)', () => {
+    auth.updatePassword('alice', 'resetpass');
+    // Reset password should work
+    const result = auth.authenticate('alice', 'resetpass');
+    assert.equal(result.username, 'alice');
+    // Old password should no longer work
+    assert.throws(() => auth.authenticate('alice', 'oldpass'), /Invalid credentials/);
+  });
+});
+
+describe('MFA-pending sessions', () => {
+  let auth;
+  beforeEach(() => {
+    auth = createAuthManager({ sessionTTL: 5000 });
+    auth.createUser('alice', 'pass', 'admin');
+  });
+
+  it('should create mfaPending session', () => {
+    const token = auth.createSession('alice', { mfaPending: true });
+    assert.ok(typeof token === 'string');
+    assert.ok(token.length >= 32);
+  });
+
+  it('validateSession should return mfaPending flag', () => {
+    const token = auth.createSession('alice', { mfaPending: true });
+    const session = auth.validateSession(token);
+    assert.equal(session.mfaPending, true);
+    assert.equal(session.username, 'alice');
+  });
+
+  it('upgradeSession should clear mfaPending and extend TTL', () => {
+    const token = auth.createSession('alice', { mfaPending: true });
+    const beforeUpgrade = auth.validateSession(token);
+    assert.equal(beforeUpgrade.mfaPending, true);
+
+    const upgraded = auth.upgradeSession(token);
+    assert.equal(upgraded, true);
+
+    const afterUpgrade = auth.validateSession(token);
+    assert.equal(afterUpgrade.mfaPending, false);
+    assert.equal(afterUpgrade.username, 'alice');
+    assert.equal(afterUpgrade.role, 'admin');
+  });
+});

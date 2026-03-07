@@ -220,3 +220,216 @@ describe('Disabled policy', () => {
     assert.equal(result.matched.length, 0);
   });
 });
+
+// ── ABAC condition tests ──
+
+describe('ABAC conditions: env', () => {
+  let engine;
+  beforeEach(() => { engine = createPolicyEngine(); });
+
+  it('should match when context env is in allowed list', () => {
+    const result = engine.evaluateABACConditions(
+      { env: ['production', 'staging'] },
+      { env: 'production' }
+    );
+    assert.equal(result, true);
+  });
+
+  it('should reject when context env is not in allowed list', () => {
+    const result = engine.evaluateABACConditions(
+      { env: ['production', 'staging'] },
+      { env: 'development' }
+    );
+    assert.equal(result, false);
+  });
+
+  it('should match when context has no env (permissive)', () => {
+    const result = engine.evaluateABACConditions(
+      { env: ['production'] },
+      { type: 'event' }
+    );
+    assert.equal(result, true);
+  });
+
+  it('should resolve env from tags.env', () => {
+    const result = engine.evaluateABACConditions(
+      { env: ['staging'] },
+      { tags: { env: 'staging' } }
+    );
+    assert.equal(result, true);
+  });
+});
+
+describe('ABAC conditions: timeWindow', () => {
+  let engine;
+  beforeEach(() => { engine = createPolicyEngine(); });
+
+  it('should return true when no conditions are provided', () => {
+    assert.equal(engine.evaluateABACConditions(null, {}), true);
+    assert.equal(engine.evaluateABACConditions(undefined, {}), true);
+  });
+
+  it('should evaluate timeWindow with current UTC time', () => {
+    // We test with a window that covers the entire day so it always passes
+    const result = engine.evaluateABACConditions(
+      { timeWindow: { after: '00:00', before: '23:59' } },
+      {}
+    );
+    assert.equal(result, true);
+  });
+
+  it('should reject when before boundary is 00:00 (midnight) and current time is after', () => {
+    const now = new Date();
+    const currentMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
+    // Only run assertion if we are past midnight (which is almost always true)
+    if (currentMinutes > 0) {
+      const result = engine.evaluateABACConditions(
+        { timeWindow: { before: '00:00' } },
+        {}
+      );
+      assert.equal(result, false);
+    }
+  });
+});
+
+describe('ABAC conditions: minRiskScore', () => {
+  let engine;
+  beforeEach(() => { engine = createPolicyEngine(); });
+
+  it('should match when riskScore meets threshold', () => {
+    const result = engine.evaluateABACConditions(
+      { minRiskScore: 30 },
+      { riskScore: 50 }
+    );
+    assert.equal(result, true);
+  });
+
+  it('should reject when riskScore is below threshold', () => {
+    const result = engine.evaluateABACConditions(
+      { minRiskScore: 30 },
+      { riskScore: 10 }
+    );
+    assert.equal(result, false);
+  });
+
+  it('should use driftScore as fallback', () => {
+    const result = engine.evaluateABACConditions(
+      { minRiskScore: 20 },
+      { driftScore: 25 }
+    );
+    assert.equal(result, true);
+  });
+
+  it('should default to 0 when neither riskScore nor driftScore exists', () => {
+    const result = engine.evaluateABACConditions(
+      { minRiskScore: 1 },
+      { type: 'event' }
+    );
+    assert.equal(result, false);
+  });
+});
+
+describe('ABAC conditions: nodeTags', () => {
+  let engine;
+  beforeEach(() => { engine = createPolicyEngine(); });
+
+  it('should match when all required tags are present', () => {
+    const result = engine.evaluateABACConditions(
+      { nodeTags: { required: ['monitored', 'active'] } },
+      { tags: ['monitored', 'active', 'extra'] }
+    );
+    assert.equal(result, true);
+  });
+
+  it('should reject when a required tag is missing', () => {
+    const result = engine.evaluateABACConditions(
+      { nodeTags: { required: ['monitored', 'active'] } },
+      { tags: ['monitored'] }
+    );
+    assert.equal(result, false);
+  });
+
+  it('should reject when a forbidden tag is present', () => {
+    const result = engine.evaluateABACConditions(
+      { nodeTags: { forbidden: ['exempt'] } },
+      { tags: ['monitored', 'exempt'] }
+    );
+    assert.equal(result, false);
+  });
+
+  it('should match when no forbidden tags are present', () => {
+    const result = engine.evaluateABACConditions(
+      { nodeTags: { forbidden: ['exempt'] } },
+      { tags: ['monitored', 'active'] }
+    );
+    assert.equal(result, true);
+  });
+
+  it('should handle missing tags gracefully (empty set)', () => {
+    const result = engine.evaluateABACConditions(
+      { nodeTags: { required: ['monitored'] } },
+      { type: 'event' }
+    );
+    assert.equal(result, false);
+  });
+});
+
+describe('ABAC conditions: roles', () => {
+  let engine;
+  beforeEach(() => { engine = createPolicyEngine(); });
+
+  it('should match when role is in allowed list', () => {
+    const result = engine.evaluateABACConditions(
+      { roles: ['admin', 'operator'] },
+      { role: 'admin' }
+    );
+    assert.equal(result, true);
+  });
+
+  it('should reject when role is not in allowed list', () => {
+    const result = engine.evaluateABACConditions(
+      { roles: ['admin', 'operator'] },
+      { role: 'viewer' }
+    );
+    assert.equal(result, false);
+  });
+
+  it('should resolve role from user.role', () => {
+    const result = engine.evaluateABACConditions(
+      { roles: ['admin'] },
+      { user: { role: 'admin' } }
+    );
+    assert.equal(result, true);
+  });
+
+  it('should pass when context has no role (permissive)', () => {
+    const result = engine.evaluateABACConditions(
+      { roles: ['admin'] },
+      { type: 'event' }
+    );
+    assert.equal(result, true);
+  });
+});
+
+describe('ABAC conditions in drift evaluation', () => {
+  it('should skip rules whose ABAC conditions do not match', () => {
+    const engine = createPolicyEngine();
+    engine.loadPolicy({
+      id: 'abac-drift-1',
+      name: 'ABAC Drift',
+      rules: [
+        { field: 'type', operator: 'eq', value: 'shell_exec', score: 25, conditions: { env: ['production'] } },
+        { field: 'type', operator: 'eq', value: 'shell_exec', score: 5, conditions: null }
+      ],
+      enforcement: { ladder: [{ threshold: 20, action: 'warn' }] }
+    });
+
+    // Context env=staging means the first rule (score 25) should be skipped
+    const result = engine.evaluateDriftScore(
+      [{ type: 'shell_exec' }],
+      'abac-drift-1',
+      { env: 'staging' }
+    );
+    assert.equal(result.score, 5);
+  });
+});

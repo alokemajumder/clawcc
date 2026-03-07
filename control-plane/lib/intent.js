@@ -17,13 +17,21 @@ function createContract(sessionId, options) {
   };
 }
 
+function validateSessionId(sessionId) {
+  if (!sessionId || /[^a-zA-Z0-9_-]/.test(sessionId)) {
+    throw new Error('Invalid session ID');
+  }
+}
+
 function attachContract(dataDir, sessionId, contract) {
+  validateSessionId(sessionId);
   const dir = path.join(dataDir, 'intents');
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, sessionId + '.json'), JSON.stringify(contract, null, 2));
 }
 
 function loadContract(dataDir, sessionId) {
+  validateSessionId(sessionId);
   try {
     return JSON.parse(fs.readFileSync(path.join(dataDir, 'intents', sessionId + '.json'), 'utf8'));
   } catch {

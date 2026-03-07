@@ -31,18 +31,48 @@ function createSandbox(config = {}) {
   function checkSymlink(targetPath) {
     try {
       const resolved = path.resolve(targetPath);
+      // Check if the path itself or any component is a symlink using lstatSync
+      try {
+        const lstat = fs.lstatSync(resolved);
+        if (lstat.isSymbolicLink()) {
+          const real = fs.realpathSync(resolved);
+          // Resolve allowed paths to their real paths too for comparison
+          const realAllowedPaths = allowedPaths.map(ap => {
+            try { return fs.realpathSync(ap); } catch { return ap; }
+          });
+          const realAllowed = realAllowedPaths.some(ap => real.startsWith(ap + path.sep) || real === ap);
+          if (!realAllowed) return { safe: false, reason: 'Symlink escapes allowed path' };
+        }
+      } catch (e) {
+        if (e.code === 'ENOENT') {
+          // File doesn't exist — check parent directory exists and is within allowed paths
+          const parentDir = path.dirname(resolved);
+          try {
+            const parentReal = fs.realpathSync(parentDir);
+            const realAllowedPaths = allowedPaths.map(ap => {
+              try { return fs.realpathSync(ap); } catch { return ap; }
+            });
+            const parentAllowed = realAllowedPaths.some(ap => parentReal.startsWith(ap + path.sep) || parentReal === ap);
+            if (!parentAllowed) return { safe: false, reason: 'Parent directory escapes allowed path' };
+          } catch {
+            return { safe: false, reason: 'Parent directory does not exist' };
+          }
+          return { safe: true };
+        }
+        throw e;
+      }
+      // Also verify realpath matches for non-symlink paths (handles symlinked parent dirs)
       const real = fs.realpathSync(resolved);
       if (real !== resolved) {
-        // Resolve allowed paths to their real paths too for comparison
         const realAllowedPaths = allowedPaths.map(ap => {
           try { return fs.realpathSync(ap); } catch { return ap; }
         });
         const realAllowed = realAllowedPaths.some(ap => real.startsWith(ap + path.sep) || real === ap);
-        if (!realAllowed) return { safe: false, reason: 'Symlink escapes allowed path' };
+        if (!realAllowed) return { safe: false, reason: 'Symlink in path escapes allowed path' };
       }
       return { safe: true };
     } catch {
-      return { safe: true }; // File doesn't exist yet, allow
+      return { safe: false, reason: 'Unable to verify path safety' };
     }
   }
 
@@ -175,7 +205,8 @@ function executeAction(action, allowlists) {
   if (!cmdDef) return { success: false, error: 'Command not in allowlist' };
 
   try {
-    const args = cmdDef.allowedArgs || [];
+    // Use the action's args if provided, falling back to allowlist defaults
+    const args = action.args || cmdDef.allowedArgs || [];
     const output = execFileSync(cmdDef.command, args, {
       timeout: cmdDef.timeout || 30000,
       encoding: 'utf8',
@@ -189,7 +220,11 @@ function executeAction(action, allowlists) {
       truncated
     };
   } catch (err) {
-    return { success: false, error: err.message };
+    // Limit error detail to avoid leaking internal paths or stack traces
+    const safeError = err.code === 'ETIMEDOUT' ? 'Command timed out'
+      : err.status != null ? `Command exited with code ${err.status}`
+      : 'Command execution failed';
+    return { success: false, error: safeError };
   }
 }
 

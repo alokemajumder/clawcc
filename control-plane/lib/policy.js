@@ -5,6 +5,8 @@
 const MAX_REGEX_PATTERN_LENGTH = 200;
 const DANGEROUS_REGEX = /(\{[^}]*\{|\+\+|\*\*|\+\*|\*\+|\(\?[^)]*\(|\([^)]*\+[^)]*\)\+|\([^)]*\*[^)]*\)\*|\([^)]*\+[^)]*\)\*|\([^)]*\*[^)]*\)\+)/;
 
+const MAX_REGEX_CACHE = 1000;
+
 function compileRegex(pattern, cache) {
   if (cache.has(pattern)) return cache.get(pattern);
   if (typeof pattern !== 'string' || pattern.length > MAX_REGEX_PATTERN_LENGTH) {
@@ -14,6 +16,11 @@ function compileRegex(pattern, cache) {
     throw new Error('Regex pattern contains potentially dangerous constructs (nested quantifiers)');
   }
   const re = new RegExp(pattern);
+  // Evict oldest entries if cache grows too large
+  if (cache.size >= MAX_REGEX_CACHE) {
+    const first = cache.keys().next().value;
+    cache.delete(first);
+  }
   cache.set(pattern, re);
   return re;
 }

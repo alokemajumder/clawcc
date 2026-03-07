@@ -9,10 +9,10 @@ const { URL } = require('url');
 
 // Load config
 const configPaths = [
+  process.env.CLAWCC_CONFIG,
   path.join(process.cwd(), 'clawcc.config.json'),
   path.join(__dirname, '..', 'config', 'clawcc.config.json'),
-  path.join(__dirname, '..', 'config', 'clawcc.config.example.json'),
-  process.env.CLAWCC_CONFIG
+  path.join(__dirname, '..', 'config', 'clawcc.config.example.json')
 ].filter(Boolean);
 
 let config = {};
@@ -28,6 +28,25 @@ config.host = config.host || '0.0.0.0';
 config.port = config.port || 3400;
 config.dataDir = path.resolve(config.dataDir || './data');
 config.httpsEnabled = config.httpsEnabled || false;
+
+// Validate critical config
+if (config.port && (typeof config.port !== 'number' || config.port < 1 || config.port > 65535)) {
+  console.error('FATAL: Invalid port:', config.port);
+  process.exit(1);
+}
+if (config.httpsEnabled) {
+  if (!config.httpsKeyPath || !config.httpsCertPath) {
+    console.error('FATAL: httpsEnabled=true but httpsKeyPath or httpsCertPath not set');
+    process.exit(1);
+  }
+  try {
+    fs.accessSync(config.httpsKeyPath, fs.constants.R_OK);
+    fs.accessSync(config.httpsCertPath, fs.constants.R_OK);
+  } catch (err) {
+    console.error('FATAL: Cannot read TLS cert/key:', err.message);
+    process.exit(1);
+  }
+}
 
 // Create data directories
 const dataDirs = ['events', 'snapshots', 'audit', 'receipts', 'receipts/roots', 'fleet', 'intents', 'users'];
@@ -62,6 +81,10 @@ const authManager = createAuthManager({
 const defaultAdminPw = config.auth && config.auth.defaultAdminPassword ? config.auth.defaultAdminPassword : 'changeme';
 authManager.createDefaultAdmin(defaultAdminPw);
 if (defaultAdminPw === 'changeme') {
+  if (config.mode === 'production') {
+    console.error('FATAL: Default admin password is "changeme" — set config.auth.defaultAdminPassword before running in production');
+    process.exit(1);
+  }
   console.warn('[SECURITY] Default admin password is "changeme" — change it immediately via /api/auth/change-password or config.auth.defaultAdminPassword');
 }
 
@@ -75,9 +98,13 @@ const auth = {
       return { success: false };
     }
   },
-  createSession(user) {
-    const token = authManager.createSession(user.username || user.user?.username || 'admin');
-    return { token, expiresAt: Date.now() + 86400000 };
+  createSession(user, opts = {}) {
+    const username = user.username || user.user?.username || 'admin';
+    const token = authManager.createSession(username, { mfaPending: !!opts.mfaPending });
+    return { token, expiresAt: Date.now() + (opts.mfaPending ? 300000 : 86400000) };
+  },
+  upgradeSession(token) {
+    return authManager.upgradeSession(token);
   },
   validateSession(token) {
     return authManager.validateSession(token);
@@ -149,7 +176,10 @@ const events = {
       index.indexEvent(adapted);
       return stored;
     }
-    catch { /* ignore validation errors for optional events */ }
+    catch (err) {
+      // Log validation errors instead of silently swallowing
+      if (err.message) console.warn('Event ingest error:', err.message);
+    }
   },
   subscribe(filter, callback) {
     // The factory subscribe doesn't support filters - we filter in the wrapper
@@ -407,6 +437,23 @@ async function handleRequest(req, res) {
   // Security headers
   securityHeaders(req, res, config.httpsEnabled);
 
+  // CORS handling
+  const allowedOrigins = config.cors && config.cors.origins
+    ? config.cors.origins
+    : ['http://localhost:' + config.port];
+  const origin = req.headers.origin;
+  if (origin && allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type,X-ClawCC-NodeId,X-ClawCC-Timestamp,X-ClawCC-Nonce,X-ClawCC-Signature');
+  }
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204);
+    res.end();
+    return;
+  }
+
   // Unauthenticated health check for load balancers / k8s probes
   if (req.url === '/healthz' || req.url === '/api/healthz') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -486,10 +533,10 @@ server.listen(config.port, config.host, () => {
 });
 
 // Periodic snapshot rebuild
-const snapshotInterval = (config.events && config.events.snapshotIntervalMs) || 60000;
-setInterval(() => {
+const snapshotIntervalMs = (config.events && config.events.snapshotIntervalMs) || 60000;
+const snapshotRebuildInterval = setInterval(() => {
   try { snapshotsMod.rebuild(config.dataDir); } catch { /* ignore */ }
-}, snapshotInterval);
+}, snapshotIntervalMs);
 
 // Graceful shutdown
 let shuttingDown = false;
@@ -499,6 +546,14 @@ function shutdown(signal) {
   console.log('\nReceived ' + signal + ' - shutting down...');
   // Flush any pending snapshot writes
   try { index.flushSnapshots(); } catch { /* ignore */ }
+  // Log write queue status
+  try {
+    const stats = eventStoreInstance.getWriteQueueStats();
+    if (stats.queued > 0) console.log('Flushing ' + stats.queued + ' pending event writes...');
+    if (stats.dropped > 0) console.warn('Warning: ' + stats.dropped + ' writes were dropped due to backpressure during this session');
+  } catch { /* ignore */ }
+  // Clear snapshot rebuild interval
+  clearInterval(snapshotRebuildInterval);
   // Stop accepting new connections
   server.close(() => {
     console.log('Server closed.');

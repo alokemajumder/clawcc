@@ -92,17 +92,27 @@ function createAuthManager(opts = {}) {
     return { username: user.username, role: user.role, mfaEnabled: user.mfaEnabled };
   }
 
-  function createSession(username) {
+  function createSession(username, opts = {}) {
     const user = users.get(username);
     if (!user) throw new Error('User not found');
     const token = crypto.randomBytes(32).toString('hex');
+    const ttl = opts.mfaPending ? Math.min(sessionTTL, 300000) : sessionTTL; // 5 min max for MFA-pending
     sessions.set(token, {
       username, role: user.role,
       createdAt: Date.now(),
-      expiresAt: Date.now() + sessionTTL,
-      stepUpAt: 0
+      expiresAt: Date.now() + ttl,
+      stepUpAt: 0,
+      mfaPending: !!opts.mfaPending
     });
     return token;
+  }
+
+  function upgradeSession(token) {
+    const session = sessions.get(token);
+    if (!session) return false;
+    session.mfaPending = false;
+    session.expiresAt = Date.now() + sessionTTL; // extend to full TTL after MFA
+    return true;
   }
 
   function validateSession(token) {
@@ -112,7 +122,7 @@ function createAuthManager(opts = {}) {
       sessions.delete(token);
       return null;
     }
-    return { username: session.username, role: session.role };
+    return { username: session.username, role: session.role, mfaPending: !!session.mfaPending };
   }
 
   function destroySession(token) {
@@ -226,7 +236,7 @@ function createAuthManager(opts = {}) {
   }
 
   return {
-    createUser, authenticate, createSession, validateSession, destroySession,
+    createUser, authenticate, createSession, upgradeSession, validateSession, destroySession,
     rotateSession, checkPermission, setupMFA, verifyMFA,
     stepUpAuth, requireStepUp, createDefaultAdmin, getUser, listUsers,
     changePassword, updatePassword, getStepUpAt, useRecoveryCode

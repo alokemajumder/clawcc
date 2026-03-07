@@ -313,14 +313,15 @@ const App = {
     const backdrop = document.getElementById('modal-backdrop');
     if (!backdrop) return;
 
+    const esc = typeof escapeHtml === 'function' ? escapeHtml : (s) => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     const actionsHtml = actions.map((a, i) =>
-      `<button class="${a.class || 'btn btn-ghost'}" data-modal-action="${i}">${a.label}</button>`
+      `<button class="${a.class || 'btn btn-ghost'}" data-modal-action="${i}">${esc(a.label)}</button>`
     ).join('');
 
     backdrop.innerHTML = `
       <div class="modal">
         <div class="modal-header">
-          <h3>${title}</h3>
+          <h3>${esc(title)}</h3>
           <button class="btn-icon" data-modal-close>&times;</button>
         </div>
         <div class="modal-body">${content}</div>

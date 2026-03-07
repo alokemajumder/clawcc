@@ -125,7 +125,9 @@ function registerOpsRoutes(router, config, modules) {
     const crypto = require('crypto');
     let beforeHash = '';
     try { beforeHash = crypto.createHash('sha256').update(fs.readFileSync(result.resolved, 'utf8')).digest('hex'); } catch {}
-    fs.writeFileSync(result.resolved, body.content, 'utf8');
+    const tmpWritePath = result.resolved + '.tmp';
+    fs.writeFileSync(tmpWritePath, body.content, 'utf8');
+    fs.renameSync(tmpWritePath, result.resolved);
     const afterHash = crypto.createHash('sha256').update(body.content).digest('hex');
     audit.log({ actor: authResult.user.username, action: 'file.write', target: body.path, beforeHash, afterHash, reason: body.reason || '' });
     res.json(200, { success: true });

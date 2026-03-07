@@ -45,7 +45,10 @@ function registerGovernanceRoutes(router, config, modules) {
     if (!policyId || /[^a-zA-Z0-9_-]/.test(policyId)) return res.error(400, 'Invalid policy ID');
     let body;
     try { body = await parseBody(req); } catch (err) { return res.error(400, err.message); }
-    fs.writeFileSync(path.join(policiesDir, policyId + '.policy.json'), JSON.stringify(body, null, 2));
+    const tmpPolicyPath = path.join(policiesDir, policyId + '.policy.json.tmp');
+    const finalPolicyPath = path.join(policiesDir, policyId + '.policy.json');
+    fs.writeFileSync(tmpPolicyPath, JSON.stringify(body, null, 2));
+    fs.renameSync(tmpPolicyPath, finalPolicyPath);
     if (index) index.invalidatePolicyCache();
     audit.log({ actor: authResult.user.username, action: 'policy.updated', target: req.params.id, detail: JSON.stringify(body) });
     res.json(200, { success: true });
@@ -175,7 +178,9 @@ function registerGovernanceRoutes(router, config, modules) {
     let body;
     try { body = await parseBody(req); } catch (err) { return res.error(400, err.message); }
     const twPath = path.join(config.dataDir, '..', 'tripwires', 'default.tripwires.json');
-    fs.writeFileSync(twPath, JSON.stringify(body, null, 2));
+    const twTmpPath = twPath + '.tmp';
+    fs.writeFileSync(twTmpPath, JSON.stringify(body, null, 2));
+    fs.renameSync(twTmpPath, twPath);
     audit.log({ actor: authResult.user.username, action: 'tripwires.updated', target: 'default' });
     res.json(200, { success: true });
   });
@@ -193,7 +198,7 @@ function registerGovernanceRoutes(router, config, modules) {
     if (!auth.checkPermission(authResult.user, 'audit:read')) return res.error(403, 'Insufficient permissions');
     const entries = audit.query(config.dataDir, {
       actor: req.query.actor, action: req.query.action, from: req.query.from, to: req.query.to,
-      limit: parseInt(req.query.limit || '100', 10)
+      limit: Math.min(Math.max(1, parseInt(req.query.limit || '100', 10)), 1000)
     });
     res.json(200, { success: true, entries });
   });

@@ -1,6 +1,10 @@
 'use strict';
 
 const crypto = require('crypto');
+const { createNonceTracker } = require('../lib/crypto');
+
+// Module-level nonce tracker — prevents replay attacks on signed requests
+const nonceTracker = createNonceTracker(300000); // 5 min window
 
 function authenticate(req, authModule) {
   const token = req.cookies && req.cookies.clawcc_session;
@@ -10,6 +14,10 @@ function authenticate(req, authModule) {
   const user = authModule.validateSession(token);
   if (!user) {
     return { authenticated: false, error: 'Invalid or expired session' };
+  }
+  // Block MFA-pending sessions from accessing any authenticated endpoint
+  if (user.mfaPending) {
+    return { authenticated: false, error: 'MFA verification required' };
   }
   return { authenticated: true, user };
 }
@@ -57,13 +65,20 @@ function verifyNodeSignature(req, config, cryptoModule) {
     return { valid: false, error: 'Request timestamp expired' };
   }
 
+  // Reject replayed nonces
+  if (!nonceTracker.accept(nonce)) {
+    return { valid: false, error: 'Nonce already used (replay detected)' };
+  }
+
   const nodeSecret = config.fleet && config.fleet.nodeSecrets && config.fleet.nodeSecrets[nodeId];
-  const globalSecret = config.sessionSecret || 'default-secret';
-  const secret = nodeSecret || globalSecret;
+  if (!nodeSecret && (!config.sessionSecret || config.sessionSecret === 'default-secret')) {
+    return { valid: false, error: 'No node secret configured — set config.sessionSecret or config.fleet.nodeSecrets' };
+  }
+  const secret = nodeSecret || config.sessionSecret;
 
   const method = req.method;
   const path = req.url;
-  const valid = cryptoModule.verifySignedRequest(secret, method, path, timestamp, '', signature, maxAge);
+  const valid = cryptoModule.verifyRequest(secret, method, path, timestamp, '', signature, maxAge);
 
   if (!valid) {
     return { valid: false, error: 'Invalid signature' };
