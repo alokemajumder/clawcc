@@ -21,7 +21,10 @@ function registerFleetRoutes(router, config, modules) {
   }
 
   router.post('/api/fleet/register', async (req, res) => {
-    const body = await parseBody(req);
+    const sigResult = verifyNodeSignature(req, config, cryptoMod);
+    if (!sigResult.valid) return res.error(401, 'Not authenticated: ' + sigResult.error);
+    let body;
+    try { body = await parseBody(req); } catch (err) { return res.error(400, err.message); }
     const { nodeId, hostname, os, tags, tailscaleIp } = body;
     if (!nodeId || !hostname) return res.error(400, 'nodeId and hostname required');
 
@@ -40,7 +43,10 @@ function registerFleetRoutes(router, config, modules) {
   });
 
   router.post('/api/fleet/heartbeat', async (req, res) => {
-    const body = await parseBody(req);
+    const sigResult = verifyNodeSignature(req, config, cryptoMod);
+    if (!sigResult.valid) return res.error(401, 'Not authenticated: ' + sigResult.error);
+    let body;
+    try { body = await parseBody(req); } catch (err) { return res.error(400, err.message); }
     const { nodeId, health, sessions, timestamp } = body;
     if (!nodeId) return res.error(400, 'nodeId required');
 
@@ -98,7 +104,8 @@ function registerFleetRoutes(router, config, modules) {
     const authResult = authenticate(req, auth);
     if (!authResult.authenticated) return res.error(401, 'Not authenticated');
     if (!auth.checkPermission(authResult.user, 'action:safe')) return res.error(403, 'Insufficient permissions');
-    const body = await parseBody(req);
+    let body;
+    try { body = await parseBody(req); } catch (err) { return res.error(400, err.message); }
     const commandId = require('crypto').randomUUID();
     const command = { id: commandId, action: body.action, args: body.args, requestedBy: authResult.user.username, ts: new Date().toISOString() };
     const cmds = pendingCommands.get(req.params.nodeId) || [];

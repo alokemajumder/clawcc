@@ -32,15 +32,16 @@ function driftClass(score) {
 
 function statusBadge(status) {
   const s = (status || '').toLowerCase();
+  const escaped = escapeHtml(status);
   if (s === 'online' || s === 'active' || s === 'running' || s === 'healthy')
-    return `<span class="badge badge-online">${status}</span>`;
+    return `<span class="badge badge-online">${escaped}</span>`;
   if (s === 'offline' || s === 'dead' || s === 'stopped' || s === 'failed')
-    return `<span class="badge badge-offline">${status}</span>`;
+    return `<span class="badge badge-offline">${escaped}</span>`;
   if (s === 'warning' || s === 'degraded' || s === 'idle')
-    return `<span class="badge badge-warning">${status}</span>`;
+    return `<span class="badge badge-warning">${escaped}</span>`;
   if (s === 'pending')
-    return `<span class="badge badge-info">${status}</span>`;
-  return `<span class="badge badge-neutral">${status}</span>`;
+    return `<span class="badge badge-info">${escaped}</span>`;
+  return `<span class="badge badge-neutral">${escaped}</span>`;
 }
 
 function sparklineSvg(data, color) {
@@ -140,12 +141,12 @@ async function loadFleetData() {
       tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted p-4">No nodes registered</td></tr>';
     } else {
       tbody.innerHTML = list.map(n => `
-        <tr class="clickable" data-node-id="${n.id}">
-          <td class="font-semibold">${n.hostname || n.id}</td>
+        <tr class="clickable" data-node-id="${escapeHtml(n.id)}">
+          <td class="font-semibold">${escapeHtml(n.hostname || n.id)}</td>
           <td>${statusBadge(n.status)}</td>
-          <td class="text-secondary text-sm">${n.os || '--'}</td>
-          <td>${(n.tags || []).map(t => `<span class="badge badge-neutral">${t}</span>`).join(' ') || '--'}</td>
-          <td class="text-mono text-sm">${n.tailscaleIp || '--'}</td>
+          <td class="text-secondary text-sm">${escapeHtml(n.os || '--')}</td>
+          <td>${(n.tags || []).map(t => `<span class="badge badge-neutral">${escapeHtml(t)}</span>`).join(' ') || '--'}</td>
+          <td class="text-mono text-sm">${escapeHtml(n.tailscaleIp || '--')}</td>
           <td class="text-muted text-sm">${timeAgo(n.lastHeartbeat)}</td>
           <td>${sparklineSvg(n.cpuHistory, '#6366f1')}</td>
           <td>${sparklineSvg(n.ramHistory, '#3b82f6')}</td>
@@ -157,7 +158,7 @@ async function loadFleetData() {
     loadTopology();
   } catch (err) {
     document.getElementById('fleet-table-body').innerHTML =
-      `<tr><td colspan="9" class="text-center text-danger p-4">Failed to load: ${err.message}</td></tr>`;
+      `<tr><td colspan="9" class="text-center text-danger p-4">Failed to load: ${escapeHtml(err.message)}</td></tr>`;
   }
 }
 
@@ -213,9 +214,9 @@ async function loadTopology() {
       const isAgent = n.type === 'node';
       const color = isAgent ? ((n.status || '').toLowerCase() === 'online' ? '#22c55e' : '#ef4444') : '#6366f1';
       const r = isAgent ? 10 : 7;
-      svg += '<g class="topo-node" data-topo-id="' + id + '" data-topo-type="' + (n.type||'') + '" data-topo-label="' + (n.label || n.hostname || id) + '">';
+      svg += '<g class="topo-node" data-topo-id="' + escapeHtml(id) + '" data-topo-type="' + escapeHtml(n.type||'') + '" data-topo-label="' + escapeHtml(n.label || n.hostname || id) + '">';
       svg += '<circle cx="' + p.x + '" cy="' + p.y + '" r="' + r + '" fill="' + color + '" opacity="0.85"/>';
-      svg += '<text x="' + p.x + '" y="' + (p.y + r + 14) + '" fill="#a1a1aa" font-size="' + (isAgent ? 11 : 9) + '" text-anchor="middle">' + (n.label || n.hostname || id) + '</text>';
+      svg += '<text x="' + p.x + '" y="' + (p.y + r + 14) + '" fill="#a1a1aa" font-size="' + (isAgent ? 11 : 9) + '" text-anchor="middle">' + escapeHtml(n.label || n.hostname || id) + '</text>';
       svg += '</g>';
     }
 
@@ -228,7 +229,7 @@ async function loadTopology() {
         const tip = document.getElementById('topo-tooltip');
         const label = g.dataset.topoLabel || g.dataset.topoId;
         const type = g.dataset.topoType === 'node' ? 'Agent Node' : 'Tool';
-        tip.innerHTML = '<div class="font-semibold">' + label + '</div><div class="text-xs text-muted">' + type + '</div>';
+        tip.innerHTML = '<div class="font-semibold">' + escapeHtml(label) + '</div><div class="text-xs text-muted">' + type + '</div>';
         tip.style.display = 'block';
         const rect = container.getBoundingClientRect();
         tip.style.left = (ev.clientX - rect.left + 10) + 'px';
@@ -271,18 +272,18 @@ async function openNodeDetail(nodeId) {
     } catch { /* blast radius optional */ }
 
     panel.innerHTML = `
-      <div class="panel-header"><h2>${n.hostname || n.id}</h2><button class="btn-icon panel-close" title="Close">&#x2715;</button></div>
+      <div class="panel-header"><h2>${escapeHtml(n.hostname || n.id)}</h2><button class="btn-icon panel-close" title="Close">&#x2715;</button></div>
       <div class="mb-4">
         ${statusBadge(n.status)}
-        <span class="text-muted text-sm" style="margin-left:8px">${n.os || ''}</span>
+        <span class="text-muted text-sm" style="margin-left:8px">${escapeHtml(n.os || '')}</span>
       </div>
       <div class="mb-4">
         <div class="text-secondary text-sm mb-2">Tailscale IP</div>
-        <div class="text-mono">${n.tailscaleIp || '--'}</div>
+        <div class="text-mono">${escapeHtml(n.tailscaleIp || '--')}</div>
       </div>
       <div class="mb-4">
         <div class="text-secondary text-sm mb-2">Tags</div>
-        <div>${(n.tags || []).map(t => `<span class="badge badge-neutral">${t}</span>`).join(' ') || 'None'}</div>
+        <div>${(n.tags || []).map(t => `<span class="badge badge-neutral">${escapeHtml(t)}</span>`).join(' ') || 'None'}</div>
       </div>
       <div class="mb-4">
         <div class="text-secondary text-sm mb-2">Last Heartbeat</div>
@@ -294,13 +295,13 @@ async function openNodeDetail(nodeId) {
       </div>
       ${brHtml}
       <div class="mt-6 flex gap-2">
-        <button class="btn btn-ghost btn-sm" data-node-action="restart" data-node-id="${n.id}">Restart</button>
-        <button class="btn btn-ghost btn-sm" data-node-action="drain" data-node-id="${n.id}">Drain</button>
-        <button class="btn btn-danger btn-sm" data-node-action="kill" data-node-id="${n.id}">Kill</button>
+        <button class="btn btn-ghost btn-sm" data-node-action="restart" data-node-id="${escapeHtml(n.id)}">Restart</button>
+        <button class="btn btn-ghost btn-sm" data-node-action="drain" data-node-id="${escapeHtml(n.id)}">Drain</button>
+        <button class="btn btn-danger btn-sm" data-node-action="kill" data-node-id="${escapeHtml(n.id)}">Kill</button>
       </div>
     `;
   } catch (err) {
-    panel.innerHTML = `<div class="panel-header"><h2>Error</h2><button class="btn-icon panel-close" title="Close">&#x2715;</button></div><p class="text-danger">${err.message}</p>`;
+    panel.innerHTML = `<div class="panel-header"><h2>Error</h2><button class="btn-icon panel-close" title="Close">&#x2715;</button></div><p class="text-danger">${escapeHtml(err.message)}</p>`;
   }
 }
 
@@ -412,7 +413,7 @@ async function loadSessionsData() {
     renderSessionsTable(_sessionsCache);
   } catch (err) {
     document.getElementById('sessions-table-body').innerHTML =
-      `<tr><td colspan="9" class="text-center text-danger p-4">Failed: ${err.message}</td></tr>`;
+      `<tr><td colspan="9" class="text-center text-danger p-4">Failed: ${escapeHtml(err.message)}</td></tr>`;
   }
 }
 
@@ -425,11 +426,11 @@ function renderSessionsTable(sessions) {
   tbody.innerHTML = sessions.map(s => {
     const drift = s.driftScore ?? 0;
     return `
-      <tr class="clickable" data-session-id="${s.id}">
-        <td><span class="text-mono truncate" title="${s.id}">${truncId(s.id)}</span></td>
-        <td class="text-sm">${s.node || '--'}</td>
+      <tr class="clickable" data-session-id="${escapeHtml(s.id)}">
+        <td><span class="text-mono truncate" title="${escapeHtml(s.id)}">${truncId(s.id)}</span></td>
+        <td class="text-sm">${escapeHtml(s.node || '--')}</td>
         <td>${statusBadge(s.status)}</td>
-        <td class="text-sm">${s.provider ? s.provider + ' / ' : ''}${s.model || '--'}</td>
+        <td class="text-sm">${s.provider ? escapeHtml(s.provider) + ' / ' : ''}${escapeHtml(s.model || '--')}</td>
         <td class="text-sm text-muted">${s.toolsUsed ?? '--'}</td>
         <td class="text-sm text-mono">${s.tokens != null ? s.tokens.toLocaleString() : '--'}</td>
         <td class="text-sm">${s.cost != null ? '$' + s.cost.toFixed(4) : '--'}</td>
@@ -473,8 +474,8 @@ async function openSessionDetail(sessionId) {
       timelineHtml = `<div class="section-title mt-6">Timeline</div><div class="timeline">${events.map(e => `
         <div class="timeline-item">
           <div class="tl-time">${e.timestamp ? new Date(e.timestamp).toLocaleTimeString() : ''}</div>
-          <div class="tl-type">${e.type || e.event || ''}</div>
-          <div class="tl-detail">${e.detail || e.message || ''}</div>
+          <div class="tl-type">${escapeHtml(e.type || e.event || '')}</div>
+          <div class="tl-detail">${escapeHtml(e.detail || e.message || '')}</div>
         </div>
       `).join('')}</div>`;
     } catch { /* timeline optional */ }
@@ -488,7 +489,7 @@ async function openSessionDetail(sessionId) {
         <div class="blast-radius-card mb-4">
           <div class="br-header">Blast Radius</div>
           <div class="br-stat"><span>Events</span><span>${b.eventsCount || 0}</span></div>
-          <div class="br-stat"><span>Tools Used</span><span>${(b.toolsUsed || []).join(', ') || 'None'}</span></div>
+          <div class="br-stat"><span>Tools Used</span><span>${escapeHtml((b.toolsUsed || []).join(', ') || 'None')}</span></div>
           <div class="br-stat"><span>Files Accessed</span><span>${(b.filesAccessed || []).length}</span></div>
           <div class="br-stat"><span>Cost at Risk</span><span>$${(b.cost || 0).toFixed(4)}</span></div>
         </div>`;
@@ -501,9 +502,9 @@ async function openSessionDetail(sessionId) {
         <div class="text-secondary text-sm mb-2">Drift Score Factors</div>
         ${Object.entries(s.driftFactors || {}).map(([name, val]) => {
           const cls = val < 5 ? 'df-low' : val < 12 ? 'df-medium' : 'df-high';
-          return '<div class="drift-factor"><span class="text-sm" style="min-width:110px">' + name + '</span><div class="drift-factor-bar"><div class="drift-factor-fill ' + cls + '" style="width:' + (val * 5) + '%"></div></div><span class="text-xs text-muted">' + val + '/20</span></div>';
+          return '<div class="drift-factor"><span class="text-sm" style="min-width:110px">' + escapeHtml(name) + '</span><div class="drift-factor-bar"><div class="drift-factor-fill ' + cls + '" style="width:' + (val * 5) + '%"></div></div><span class="text-xs text-muted">' + val + '/20</span></div>';
         }).join('')}
-        ${(s.driftReasons || []).map(r => '<div class="drift-reason-item">' + r + '</div>').join('')}
+        ${(s.driftReasons || []).map(r => '<div class="drift-reason-item">' + escapeHtml(r) + '</div>').join('')}
       </div>` : '';
 
     panel.innerHTML = `
@@ -513,8 +514,8 @@ async function openSessionDetail(sessionId) {
       </div>
       <div class="mb-4">${statusBadge(s.status)}</div>
       <div class="grid-2 mb-4">
-        <div><span class="text-secondary text-sm">Node</span><div>${s.node || '--'}</div></div>
-        <div><span class="text-secondary text-sm">Model</span><div>${s.provider ? s.provider + '/' : ''}${s.model || '--'}</div></div>
+        <div><span class="text-secondary text-sm">Node</span><div>${escapeHtml(s.node || '--')}</div></div>
+        <div><span class="text-secondary text-sm">Model</span><div>${s.provider ? escapeHtml(s.provider) + '/' : ''}${escapeHtml(s.model || '--')}</div></div>
         <div><span class="text-secondary text-sm">Tokens</span><div class="text-mono">${s.tokens != null ? s.tokens.toLocaleString() : '--'}</div></div>
         <div><span class="text-secondary text-sm">Cost</span><div>${s.cost != null ? '$' + s.cost.toFixed(4) : '--'}</div></div>
         <div><span class="text-secondary text-sm">Drift Score</span><div><div class="drift-meter"><div class="drift-fill ${driftClass(drift)}" style="width:${drift}%"></div></div><span class="text-xs text-muted">${drift}%</span></div></div>
@@ -523,15 +524,15 @@ async function openSessionDetail(sessionId) {
       ${driftFactorsHtml}
       ${blastHtml}
       <div class="flex gap-2 mb-4">
-        <button class="btn btn-ghost btn-sm" data-compare-session="${s.id}">Compare</button>
-        <button class="btn btn-primary btn-sm" data-replay-session="${s.id}">Replay</button>
-        <button class="btn btn-danger btn-sm" data-kill-session="${s.id}">Kill Session</button>
+        <button class="btn btn-ghost btn-sm" data-compare-session="${escapeHtml(s.id)}">Compare</button>
+        <button class="btn btn-primary btn-sm" data-replay-session="${escapeHtml(s.id)}">Replay</button>
+        <button class="btn btn-danger btn-sm" data-kill-session="${escapeHtml(s.id)}">Kill Session</button>
       </div>
       <div id="replay-container"></div>
       ${timelineHtml}
     `;
   } catch (err) {
-    panel.innerHTML = `<div class="panel-header"><h2>Error</h2><button class="btn-icon panel-close" title="Close">&#x2715;</button></div><p class="text-danger">${err.message}</p>`;
+    panel.innerHTML = `<div class="panel-header"><h2>Error</h2><button class="btn-icon panel-close" title="Close">&#x2715;</button></div><p class="text-danger">${escapeHtml(err.message)}</p>`;
   }
 }
 
@@ -564,7 +565,7 @@ async function startSessionReplay(sessionId) {
     }
     highlightReplayStep(0);
   } catch (err) {
-    container.innerHTML = '<div class="text-danger text-sm">' + err.message + '</div>';
+    container.innerHTML = '<div class="text-danger text-sm">' + escapeHtml(err.message) + '</div>';
   }
 }
 
@@ -625,16 +626,16 @@ async function openSessionCompare(sessionId) {
         <div class="compare-col glass-card">
           <h4>Session A: ${truncId(a.sessionId || sessionId)}</h4>
           <div class="mb-4">
-            <div class="text-sm text-secondary">Node: ${summaryA.nodeId || '--'}</div>
-            <div class="text-sm text-secondary">Model: ${summaryA.model || '--'}</div>
+            <div class="text-sm text-secondary">Node: ${escapeHtml(summaryA.nodeId || '--')}</div>
+            <div class="text-sm text-secondary">Model: ${escapeHtml(summaryA.model || '--')}</div>
             <div class="text-sm text-secondary">Started: ${summaryA.startedAt ? new Date(summaryA.startedAt).toLocaleString() : '--'}</div>
           </div>
         </div>
         <div class="compare-col glass-card">
           <h4>Session B: ${truncId(b.sessionId || otherId)}</h4>
           <div class="mb-4">
-            <div class="text-sm text-secondary">Node: ${summaryB.nodeId || '--'}</div>
-            <div class="text-sm text-secondary">Model: ${summaryB.model || '--'}</div>
+            <div class="text-sm text-secondary">Node: ${escapeHtml(summaryB.nodeId || '--')}</div>
+            <div class="text-sm text-secondary">Model: ${escapeHtml(summaryB.model || '--')}</div>
             <div class="text-sm text-secondary">Started: ${summaryB.startedAt ? new Date(summaryB.startedAt).toLocaleString() : '--'}</div>
           </div>
         </div>
@@ -751,10 +752,10 @@ function appendFeedItem(data) {
   const div = document.createElement('div');
   div.className = `feed-item severity-${severity}`;
   div.innerHTML = `<span class="feed-time">${ts}</span>` +
-    (node ? `<span class="feed-node">${node}</span>` : '') +
+    (node ? `<span class="feed-node">${escapeHtml(node)}</span>` : '') +
     (session ? `<span class="feed-session">${truncId(session)}</span>` : '') +
-    `<span class="feed-type">${type}</span>` +
-    `<span>${data.message || data.detail || JSON.stringify(data.data || '')}</span>`;
+    `<span class="feed-type">${escapeHtml(type)}</span>` +
+    `<span>${escapeHtml(data.message || data.detail || JSON.stringify(data.data || ''))}</span>`;
 
   container.appendChild(div);
 
@@ -883,7 +884,7 @@ async function loadUsageData() {
 
     const providers = d.providers || [];
     document.getElementById('usage-tabs').innerHTML = providers.map((p, i) =>
-      `<button class="tab-btn ${i === 0 ? 'active' : ''}" data-provider="${p.name}">${p.name}</button>`
+      `<button class="tab-btn ${i === 0 ? 'active' : ''}" data-provider="${escapeHtml(p.name)}">${escapeHtml(p.name)}</button>`
     ).join('');
 
     if (providers.length) renderProviderDetail(providers[0].name);
@@ -894,17 +895,17 @@ async function loadUsageData() {
       const maxCost = Math.max(...providers.map(p => p.cost || 0), 1);
       bars.innerHTML = providers.map(p => {
         const h = ((p.cost || 0) / maxCost) * 100;
-        return `<div class="bar" style="height:${h}%"><div class="bar-label">${p.name}</div></div>`;
+        return `<div class="bar" style="height:${h}%"><div class="bar-label">${escapeHtml(p.name)}</div></div>`;
       }).join('');
     }
 
     // Alerts
     const alerts = d.alerts || [];
     document.getElementById('usage-alerts').innerHTML = alerts.length
-      ? alerts.map(a => `<div class="feed-item severity-${a.severity || 'warn'}">${a.message}</div>`).join('')
+      ? alerts.map(a => `<div class="feed-item severity-${escapeHtml(a.severity || 'warn')}">${escapeHtml(a.message)}</div>`).join('')
       : '<div class="text-muted text-sm">No active alerts</div>';
   } catch (err) {
-    document.getElementById('usage-totals').innerHTML = `<div class="text-danger">${err.message}</div>`;
+    document.getElementById('usage-totals').innerHTML = `<div class="text-danger">${escapeHtml(err.message)}</div>`;
   }
 }
 
@@ -917,7 +918,7 @@ async function renderProviderDetail(provider) {
       <div class="stats-grid">
         ${models.map(m => `
           <div class="stat-card glass-card">
-            <div class="stat-label">${m.model || m.name}</div>
+            <div class="stat-label">${escapeHtml(m.model || m.name)}</div>
             <div class="stat-value text-sm">${(m.requests || 0).toLocaleString()} req</div>
             <div class="stat-sub">In: ${(m.tokensIn || 0).toLocaleString()} / Out: ${(m.tokensOut || 0).toLocaleString()}</div>
             <div class="stat-sub">$${(m.cost || 0).toFixed(4)}</div>
@@ -941,8 +942,8 @@ async function loadUsageAlerts() {
       return;
     }
     banner.innerHTML = alerts.map(a =>
-      '<div class="alert-banner alert-' + (a.severity || 'warning') + '">' +
-      '<strong>' + (a.type || '') + '</strong> ' + (a.message || '') +
+      '<div class="alert-banner alert-' + escapeHtml(a.severity || 'warning') + '">' +
+      '<strong>' + escapeHtml(a.type || '') + '</strong> ' + escapeHtml(a.message || '') +
       '</div>'
     ).join('');
   } catch { /* ignore */ }
@@ -965,7 +966,7 @@ async function loadRollingUsage(window) {
 
     const provNames = Object.keys(providers);
     document.getElementById('usage-tabs').innerHTML = provNames.map((name, i) =>
-      '<button class="tab-btn ' + (i === 0 ? 'active' : '') + '" data-provider="' + name + '">' + name + '</button>'
+      '<button class="tab-btn ' + (i === 0 ? 'active' : '') + '" data-provider="' + escapeHtml(name) + '">' + escapeHtml(name) + '</button>'
     ).join('');
 
     if (provNames.length) {
@@ -974,7 +975,7 @@ async function loadRollingUsage(window) {
       document.getElementById('usage-tab-content').innerHTML = '<div class="stats-grid">' +
         Object.entries(models).map(([model, m]) =>
           '<div class="stat-card glass-card">' +
-          '<div class="stat-label">' + model + '</div>' +
+          '<div class="stat-label">' + escapeHtml(model) + '</div>' +
           '<div class="stat-value text-sm">' + (m.requests || 0).toLocaleString() + ' req</div>' +
           '<div class="stat-sub">In: ' + (m.inputTokens || 0).toLocaleString() + ' / Out: ' + (m.outputTokens || 0).toLocaleString() + '</div>' +
           '<div class="stat-sub">$' + (m.cost || 0).toFixed(4) + '</div></div>'
@@ -987,7 +988,7 @@ async function loadRollingUsage(window) {
       const maxCost = Math.max(...provNames.map(n => providers[n].totalCost || 0), 1);
       bars.innerHTML = provNames.map(n => {
         const h = ((providers[n].totalCost || 0) / maxCost) * 100;
-        return '<div class="bar" style="height:' + h + '%"><div class="bar-label">' + n + '</div></div>';
+        return '<div class="bar" style="height:' + h + '%"><div class="bar-label">' + escapeHtml(n) + '</div></div>';
       }).join('');
     }
   } catch { /* ignore */ }
@@ -1054,7 +1055,7 @@ async function loadMemoryData() {
       tree.innerHTML = files.map(f => {
         const name = typeof f === 'string' ? f : (f.path || f.name);
         const icon = name.endsWith('.md') ? '\u{1F4C4}' : '\u{1F4C1}';
-        return `<div class="file-tree-item" data-path="${name}"><span class="file-icon">${icon}</span><span>${name}</span></div>`;
+        return `<div class="file-tree-item" data-path="${escapeHtml(name)}"><span class="file-icon">${icon}</span><span>${escapeHtml(name)}</span></div>`;
       }).join('') || '<div class="text-muted text-sm p-4">No files found</div>';
     } else {
       tree.innerHTML = '<div class="text-muted text-sm p-4">Could not load files</div>';
@@ -1068,15 +1069,15 @@ async function loadMemoryData() {
         <div class="flex items-center justify-between mb-4">
           <div>
             <span class="text-secondary text-sm">Branch:</span>
-            <span class="text-mono">${git.branch || '--'}</span>
+            <span class="text-mono">${escapeHtml(git.branch || '--')}</span>
           </div>
           <div>${git.dirty ? '<span class="badge badge-warning">Dirty</span>' : '<span class="badge badge-online">Clean</span>'}</div>
         </div>
         ${commits.length ? `<div class="text-secondary text-sm mb-2">Recent Commits</div>` + commits.map(c => `
           <div class="feed-item severity-info">
             <span class="feed-time">${c.date ? new Date(c.date).toLocaleDateString() : ''}</span>
-            <span class="text-mono text-sm" style="margin-right:8px">${(c.hash || c.sha || '').slice(0, 7)}</span>
-            <span>${c.message || ''}</span>
+            <span class="text-mono text-sm" style="margin-right:8px">${escapeHtml((c.hash || c.sha || '').slice(0, 7))}</span>
+            <span>${escapeHtml(c.message || '')}</span>
           </div>
         `).join('') : '<div class="text-muted text-sm">No commits</div>'}
       `;
@@ -1098,13 +1099,13 @@ async function loadFileContent(path) {
     _currentFileContent = resp.content || resp.data || '';
     el.innerHTML = `
       <div class="flex items-center justify-between mb-4">
-        <div class="text-sm font-semibold">${path}</div>
+        <div class="text-sm font-semibold">${escapeHtml(path)}</div>
         <button class="btn btn-ghost btn-sm" id="file-edit-btn">Edit</button>
       </div>
       <pre>${escapeHtml(_currentFileContent)}</pre>
     `;
   } catch (err) {
-    el.innerHTML = `<div class="text-danger text-sm p-4">${err.message}</div>`;
+    el.innerHTML = `<div class="text-danger text-sm p-4">${escapeHtml(err.message)}</div>`;
   }
 }
 
@@ -1114,7 +1115,7 @@ function enableFileEdit() {
   if (!path) return;
   el.innerHTML = `
     <div class="flex items-center justify-between mb-4">
-      <div class="text-sm font-semibold">${path}</div>
+      <div class="text-sm font-semibold">${escapeHtml(path)}</div>
       <div class="flex gap-2">
         <button class="btn btn-ghost btn-sm" id="file-cancel-btn">Cancel</button>
         <button class="btn btn-primary btn-sm" id="file-save-btn">Save</button>
@@ -1157,9 +1158,9 @@ async function saveFileContent() {
   }
 
   App.showModal('Confirm Save', `
-    <div class="text-sm text-secondary mb-2">Changes to <strong>${filePath}</strong>:</div>
+    <div class="text-sm text-secondary mb-2">Changes to <strong>${escapeHtml(filePath)}</strong>:</div>
     <div class="diff-preview">${diffHtml}</div>
-    <div class="form-group"><label>Reason</label><div class="text-sm">${reason || '(none)'}</div></div>
+    <div class="form-group"><label>Reason</label><div class="text-sm">${escapeHtml(reason || '(none)')}</div></div>
   `, [
     { label: 'Cancel', class: 'btn btn-ghost', action: () => App.hideModal() },
     { label: 'Save Changes', class: 'btn btn-primary', action: async () => {
@@ -1173,10 +1174,9 @@ async function saveFileContent() {
   ]);
 }
 
-function escapeHtml(text) {
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 /* ── Ops Page ────────────────────────────────────────── */
@@ -1297,12 +1297,12 @@ async function loadCronData() {
       const tbody = document.getElementById('cron-table-body');
       tbody.innerHTML = jobs.length ? jobs.map(j => `
         <tr>
-          <td class="font-semibold text-sm">${j.name || j.id}</td>
+          <td class="font-semibold text-sm">${escapeHtml(j.name || j.id)}</td>
           <td>${j.enabled !== false ? '<span class="badge badge-online">Enabled</span>' : '<span class="badge badge-offline">Disabled</span>'}</td>
           <td class="text-muted text-sm">${j.nextRun ? new Date(j.nextRun).toLocaleString() : '--'}</td>
           <td>
-            <button class="btn btn-ghost btn-sm" data-cron-run="${j.id}">Run</button>
-            <button class="btn btn-ghost btn-sm" data-cron-toggle="${j.id}">${j.enabled !== false ? 'Disable' : 'Enable'}</button>
+            <button class="btn btn-ghost btn-sm" data-cron-run="${escapeHtml(j.id)}">Run</button>
+            <button class="btn btn-ghost btn-sm" data-cron-toggle="${escapeHtml(j.id)}">${j.enabled !== false ? 'Disable' : 'Enable'}</button>
           </td>
         </tr>
       `).join('') : '<tr><td colspan="4" class="text-muted text-center p-4">No cron jobs</td></tr>';
@@ -1312,7 +1312,7 @@ async function loadCronData() {
     if (histEl && histResp.status === 'fulfilled') {
       const history = histResp.value.history || [];
       histEl.innerHTML = history.length ? history.reverse().map(h =>
-        '<div class="cron-history-item"><span class="badge badge-online">' + (h.status || 'completed') + '</span><span class="text-sm font-semibold">' + (h.jobId || '--') + '</span><span class="text-muted text-sm">' + (h.triggeredBy || '') + '</span><span class="text-muted text-xs">' + timeAgo(h.triggeredAt) + '</span></div>'
+        '<div class="cron-history-item"><span class="badge badge-online">' + escapeHtml(h.status || 'completed') + '</span><span class="text-sm font-semibold">' + escapeHtml(h.jobId || '--') + '</span><span class="text-muted text-sm">' + escapeHtml(h.triggeredBy || '') + '</span><span class="text-muted text-xs">' + timeAgo(h.triggeredAt) + '</span></div>'
       ).join('') : '<div class="text-muted text-sm">No run history</div>';
     }
   } catch { /* ignore */ }
@@ -1332,7 +1332,7 @@ async function fetchLogs() {
     const autoTail = document.getElementById('log-autotail');
     if (autoTail?.checked) output.scrollTop = output.scrollHeight;
   } catch (e) {
-    output.innerHTML = `<div class="text-danger">${e.message}</div>`;
+    output.innerHTML = `<div class="text-danger">${escapeHtml(e.message)}</div>`;
   }
 }
 
@@ -1430,12 +1430,12 @@ async function renderGovTab(tab) {
               <thead><tr><th>Policy</th><th>Status</th><th>Type</th><th>Description</th><th>Actions</th></tr></thead>
               <tbody>${policies.map(p => `
                 <tr>
-                  <td class="font-semibold">${p.name || p.id}</td>
+                  <td class="font-semibold">${escapeHtml(p.name || p.id)}</td>
                   <td>${p.enabled !== false ? '<span class="badge badge-online">Active</span>' : '<span class="badge badge-offline">Disabled</span>'}</td>
-                  <td class="text-sm text-secondary">${p.type || '--'}</td>
-                  <td class="text-sm text-muted">${p.description || ''}</td>
+                  <td class="text-sm text-secondary">${escapeHtml(p.type || '--')}</td>
+                  <td class="text-sm text-muted">${escapeHtml(p.description || '')}</td>
                   <td>
-                    <button class="btn btn-ghost btn-sm" data-policy-simulate="${p.id}">Simulate</button>
+                    <button class="btn btn-ghost btn-sm" data-policy-simulate="${escapeHtml(p.id)}">Simulate</button>
                   </td>
                 </tr>
               `).join('')}</tbody>
@@ -1453,14 +1453,14 @@ async function renderGovTab(tab) {
               <thead><tr><th>Request</th><th>Requester</th><th>Type</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead>
               <tbody>${approvals.length ? approvals.map(a => `
                 <tr>
-                  <td class="font-semibold text-sm">${a.description || a.id}</td>
-                  <td class="text-sm">${a.requester || '--'}</td>
-                  <td class="text-sm text-secondary">${a.type || '--'}</td>
+                  <td class="font-semibold text-sm">${escapeHtml(a.description || a.id)}</td>
+                  <td class="text-sm">${escapeHtml(a.requester || '--')}</td>
+                  <td class="text-sm text-secondary">${escapeHtml(a.type || '--')}</td>
                   <td>${statusBadge(a.status)}</td>
                   <td class="text-muted text-sm">${timeAgo(a.createdAt)}</td>
                   <td>${a.status === 'pending' ? `
-                    <button class="btn btn-success btn-sm" data-approve-grant="${a.id}">Grant</button>
-                    <button class="btn btn-danger btn-sm" data-approve-deny="${a.id}">Deny</button>
+                    <button class="btn btn-success btn-sm" data-approve-grant="${escapeHtml(a.id)}">Grant</button>
+                    <button class="btn btn-danger btn-sm" data-approve-deny="${escapeHtml(a.id)}">Deny</button>
                   ` : '--'}</td>
                 </tr>
               `).join('') : '<tr><td colspan="6" class="text-muted text-center p-4">No pending approvals</td></tr>'}</tbody>
@@ -1482,9 +1482,9 @@ async function renderGovTab(tab) {
                   <thead><tr><th>Tripwire</th><th>Status</th><th>Threshold</th></tr></thead>
                   <tbody>${tripwires.map(t => `
                     <tr>
-                      <td class="font-semibold text-sm">${t.name || t.id}</td>
+                      <td class="font-semibold text-sm">${escapeHtml(t.name || t.id)}</td>
                       <td>${t.enabled !== false ? '<span class="badge badge-online">Active</span>' : '<span class="badge badge-offline">Disabled</span>'}</td>
-                      <td class="text-sm text-secondary">${t.threshold || '--'}</td>
+                      <td class="text-sm text-secondary">${escapeHtml(t.threshold || '--')}</td>
                     </tr>
                   `).join('')}</tbody>
                 </table>
@@ -1494,9 +1494,9 @@ async function renderGovTab(tab) {
               <div class="section-title">Recent Triggers</div>
               <div class="glass-card p-4" style="max-height:400px;overflow-y:auto">
                 ${triggers.length ? triggers.map(t => `
-                  <div class="feed-item severity-${t.severity || 'warn'}">
+                  <div class="feed-item severity-${escapeHtml(t.severity || 'warn')}">
                     <span class="feed-time">${timeAgo(t.triggeredAt)}</span>
-                    <span class="font-semibold">${t.tripwire || ''}</span>: ${t.message || t.detail || ''}
+                    <span class="font-semibold">${escapeHtml(t.tripwire || '')}</span>: ${escapeHtml(t.message || t.detail || '')}
                   </div>
                 `).join('') : '<div class="text-muted text-sm">No recent triggers</div>'}
               </div>
@@ -1521,10 +1521,10 @@ async function renderGovTab(tab) {
               <tbody>${entries.length ? entries.map(e => `
                 <tr>
                   <td class="text-muted text-sm">${e.timestamp ? new Date(e.timestamp).toLocaleString() : '--'}</td>
-                  <td class="text-sm">${e.actor || e.user || '--'}</td>
-                  <td class="text-sm font-semibold">${e.action || '--'}</td>
-                  <td class="text-sm text-secondary">${e.resource || '--'}</td>
-                  <td class="text-sm text-muted">${e.detail || e.message || ''}</td>
+                  <td class="text-sm">${escapeHtml(e.actor || e.user || '--')}</td>
+                  <td class="text-sm font-semibold">${escapeHtml(e.action || '--')}</td>
+                  <td class="text-sm text-secondary">${escapeHtml(e.resource || '--')}</td>
+                  <td class="text-sm text-muted">${escapeHtml(e.detail || e.message || '')}</td>
                 </tr>
               `).join('') : '<tr><td colspan="5" class="text-muted text-center p-4">No audit entries</td></tr>'}</tbody>
             </table>
@@ -1559,13 +1559,13 @@ async function renderGovTab(tab) {
               <thead><tr><th>Skill</th><th>Version</th><th>Status</th><th>Canary</th><th>Actions</th></tr></thead>
               <tbody>${skills.length ? skills.map(s => `
                 <tr>
-                  <td class="font-semibold">${s.name || s.id}</td>
-                  <td class="text-mono text-sm">${s.version || '--'}</td>
+                  <td class="font-semibold">${escapeHtml(s.name || s.id)}</td>
+                  <td class="text-mono text-sm">${escapeHtml(s.version || '--')}</td>
                   <td>${statusBadge(s.status)}</td>
                   <td>${s.canary ? '<span class="badge badge-warning">Canary</span>' : '<span class="badge badge-neutral">Stable</span>'}</td>
                   <td>
-                    <button class="btn btn-primary btn-sm" data-skill-deploy="${s.id}">Deploy</button>
-                    <button class="btn btn-ghost btn-sm" data-skill-rollback="${s.id}">Rollback</button>
+                    <button class="btn btn-primary btn-sm" data-skill-deploy="${escapeHtml(s.id)}">Deploy</button>
+                    <button class="btn btn-ghost btn-sm" data-skill-rollback="${escapeHtml(s.id)}">Rollback</button>
                   </td>
                 </tr>
               `).join('') : '<tr><td colspan="5" class="text-muted text-center p-4">No skills registered</td></tr>'}</tbody>
@@ -1581,8 +1581,8 @@ async function renderGovTab(tab) {
           const users = resp.users || [];
           accessHtml = users.length ? users.map(u => `
             <tr>
-              <td class="font-semibold">${u.username || '--'}</td>
-              <td><span class="badge badge-neutral">${u.role || '--'}</span></td>
+              <td class="font-semibold">${escapeHtml(u.username || '--')}</td>
+              <td><span class="badge badge-neutral">${escapeHtml(u.role || '--')}</span></td>
               <td>${u.mfaEnabled ? '<span class="badge badge-online">Enabled</span>' : '<span class="badge badge-offline">Disabled</span>'}</td>
               <td class="text-muted text-sm">${u.lastLogin ? timeAgo(u.lastLogin) : 'Never'}</td>
               <td>${statusBadge('active')}</td>
@@ -1603,6 +1603,6 @@ async function renderGovTab(tab) {
         container.innerHTML = '<div class="text-muted p-4">Unknown tab</div>';
     }
   } catch (err) {
-    container.innerHTML = `<div class="text-danger p-4">Failed to load: ${err.message}</div>`;
+    container.innerHTML = `<div class="text-danger p-4">Failed to load: ${escapeHtml(err.message)}</div>`;
   }
 }

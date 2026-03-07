@@ -177,14 +177,16 @@ describe('MFA', () => {
   });
 
   it('should set up MFA and return secret', () => {
-    const secret = auth.setupMFA('alice');
-    assert.ok(typeof secret === 'string');
-    assert.ok(secret.length > 0);
+    const result = auth.setupMFA('alice');
+    assert.ok(typeof result.secret === 'string');
+    assert.ok(result.secret.length > 0);
+    assert.ok(Array.isArray(result.recoveryCodes));
+    assert.equal(result.recoveryCodes.length, 10);
   });
 
   it('should verify MFA code', () => {
-    const secret = auth.setupMFA('alice');
-    const code = generateTOTPCode(secret);
+    const result = auth.setupMFA('alice');
+    const code = generateTOTPCode(result.secret);
     assert.ok(auth.verifyMFA('alice', code));
     // After verification, MFA should be enabled
     const user = auth.getUser('alice');

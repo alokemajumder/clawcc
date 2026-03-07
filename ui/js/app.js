@@ -245,7 +245,7 @@ const App = {
         this.showModal('Setup MFA', `
           <div class="text-center mb-4">
             <div class="text-secondary text-sm mb-2">Scan this QR code with your authenticator app</div>
-            <div class="glass-card p-4 text-mono text-sm mb-4">${setup.secret || setup.otpauth || 'See authenticator setup'}</div>
+            <div class="glass-card p-4 text-mono text-sm mb-4">${(setup.secret || setup.otpauth || 'See authenticator setup').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')}</div>
           </div>
           <div class="form-group"><label>Verification Code</label><input type="text" id="mfa-setup-code" maxlength="6" placeholder="6-digit code" style="width:100%"></div>
         `, [
@@ -281,11 +281,23 @@ const App = {
     const icons = { info: '\u2139\uFE0F', success: '\u2705', warning: '\u26A0\uFE0F', error: '\u274C' };
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
-    toast.innerHTML = `
-      <span class="toast-icon">${icons[type] || ''}</span>
-      <span class="toast-msg">${message}</span>
-      <button class="toast-close" onclick="this.parentElement.remove()">&times;</button>
-    `;
+
+    const iconSpan = document.createElement('span');
+    iconSpan.className = 'toast-icon';
+    iconSpan.textContent = icons[type] || '';
+    toast.appendChild(iconSpan);
+
+    const msgSpan = document.createElement('span');
+    msgSpan.className = 'toast-msg';
+    msgSpan.textContent = message;
+    toast.appendChild(msgSpan);
+
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'toast-close';
+    closeBtn.textContent = '\u00d7';
+    closeBtn.addEventListener('click', () => toast.remove());
+    toast.appendChild(closeBtn);
+
     container.appendChild(toast);
 
     if (duration > 0) {

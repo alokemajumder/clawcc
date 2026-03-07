@@ -43,6 +43,7 @@ const discoveryPaths = config.discoveryPaths || ['~/.claude'];
 const dataDir = (config.dataDir || './node-data').replace(/^~/, os.homedir());
 const spoolDir = (config.spoolDir || path.join(dataDir, 'spool')).replace(/^~/, os.homedir());
 const allowlistsDir = (config.allowlistsDir || '../allowlists').replace(/^~/, os.homedir());
+const maxResponseSize = config.maxResponseSize || 1048576; // 1MB response limit
 
 fs.mkdirSync(dataDir, { recursive: true });
 fs.mkdirSync(spoolDir, { recursive: true });
@@ -51,6 +52,17 @@ const spooler = initSpool(spoolDir);
 const healthCollector = startHealthCollection(telemetryIntervalMs);
 
 let controlPlaneReachable = false;
+let backoffMs = 0;
+const maxBackoffMs = 300000; // 5 minutes max backoff
+
+function resetBackoff() {
+  backoffMs = 0;
+}
+
+function increaseBackoff() {
+  if (backoffMs === 0) backoffMs = 1000;
+  else backoffMs = Math.min(backoffMs * 2, maxBackoffMs);
+}
 
 function signedRequest(method, urlPath, body) {
   return new Promise((resolve, reject) => {
@@ -81,10 +93,19 @@ function signedRequest(method, urlPath, body) {
     const client = url.protocol === 'https:' ? https : http;
     const req = client.request(options, (res) => {
       let responseBody = '';
-      res.on('data', c => responseBody += c);
+      let responseSize = 0;
+      res.on('data', c => {
+        responseSize += c.length;
+        if (responseSize > maxResponseSize) {
+          req.destroy();
+          reject(new Error('Response too large'));
+          return;
+        }
+        responseBody += c;
+      });
       res.on('end', () => {
         try { resolve(JSON.parse(responseBody)); }
-        catch { resolve({ success: false, raw: responseBody }); }
+        catch { resolve({ success: false, raw: responseBody.slice(0, 500) }); }
       });
     });
     req.on('error', reject);
@@ -106,13 +127,21 @@ async function register() {
     });
     console.log('Registration:', result.success ? 'OK' : 'Failed');
     controlPlaneReachable = !!result.success;
+    if (controlPlaneReachable) resetBackoff();
+    else increaseBackoff();
   } catch (err) {
     console.error('Registration failed:', err.message);
     controlPlaneReachable = false;
+    increaseBackoff();
   }
 }
 
 async function heartbeat() {
+  // Exponential backoff when control plane is unreachable
+  if (backoffMs > 0 && !controlPlaneReachable) {
+    return; // Skip this heartbeat, backoff timer handles retry
+  }
+
   const health = collectHealth();
   const sessions = discoverSessions(discoveryPaths);
 
@@ -120,20 +149,27 @@ async function heartbeat() {
     const result = await signedRequest('POST', '/api/fleet/heartbeat', {
       nodeId: config.nodeId,
       health,
-      sessions: sessions.map(s => ({ id: s.id, project: s.project, lastModified: s.lastModified })),
+      sessions: sessions.slice(0, 100).map(s => ({ id: s.id, project: s.project, lastModified: s.lastModified })),
       timestamp: new Date().toISOString()
     });
     controlPlaneReachable = true;
+    resetBackoff();
 
     // Process commands from control plane
-    if (result.commands && result.commands.length > 0) {
+    if (result.commands && Array.isArray(result.commands) && result.commands.length > 0) {
       for (const cmd of result.commands) {
+        if (!cmd || !cmd.action) {
+          console.warn('Skipping malformed command:', JSON.stringify(cmd));
+          continue;
+        }
         console.log('Received command:', cmd.action);
         await handleCommand(cmd);
       }
     }
   } catch (err) {
     controlPlaneReachable = false;
+    increaseBackoff();
+    console.error('Heartbeat failed (backoff:', backoffMs + 'ms):', err.message);
     // Spool health event
     spooler.spool({
       ts: new Date().toISOString(),
@@ -188,28 +224,38 @@ async function main() {
 
   await register();
 
-  // Heartbeat loop
-  setInterval(heartbeat, heartbeatIntervalMs);
+  // Store interval handles for cleanup on shutdown
+  const heartbeatInterval = setInterval(heartbeat, heartbeatIntervalMs);
+  const drainInterval = setInterval(drainSpool, 30000);
 
-  // Spool drain loop
-  setInterval(drainSpool, 30000);
+  // Backoff retry timer for reconnection
+  const backoffInterval = setInterval(async () => {
+    if (backoffMs > 0 && !controlPlaneReachable) {
+      console.log('Retrying control plane connection (backoff:', backoffMs + 'ms)...');
+      await heartbeat();
+    }
+  }, Math.max(heartbeatIntervalMs, 5000));
+
+  // Graceful shutdown
+  let shuttingDown = false;
+  function shutdown(signal) {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    console.log('\nReceived', signal, '- shutting down...');
+    clearInterval(heartbeatInterval);
+    clearInterval(drainInterval);
+    clearInterval(backoffInterval);
+    healthCollector.stop();
+    // Allow in-flight requests a moment to complete
+    setTimeout(() => process.exit(0), 1000);
+  }
+
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
 
   // Initial heartbeat
   await heartbeat();
 }
-
-// Graceful shutdown
-let shuttingDown = false;
-function shutdown(signal) {
-  if (shuttingDown) return;
-  shuttingDown = true;
-  console.log('\nReceived', signal, '- shutting down...');
-  healthCollector.stop();
-  process.exit(0);
-}
-
-process.on('SIGTERM', () => shutdown('SIGTERM'));
-process.on('SIGINT', () => shutdown('SIGINT'));
 
 main().catch(err => {
   console.error('Fatal error:', err);

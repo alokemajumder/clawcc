@@ -28,7 +28,8 @@ function registerAuthRoutes(router, config, modules) {
 
   router.post('/api/auth/login', async (req, res) => {
     if (!checkAuthRate(req)) return res.error(429, 'Too many login attempts');
-    const body = await parseBody(req);
+    let body;
+    try { body = await parseBody(req); } catch (err) { return res.error(400, err.message); }
     const { username, password } = body;
     if (!username || !password) return res.error(400, 'Username and password required');
 
@@ -59,7 +60,8 @@ function registerAuthRoutes(router, config, modules) {
   router.post('/api/auth/mfa/verify', async (req, res) => {
     const authResult = authenticate(req, auth);
     if (!authResult.authenticated) return res.error(401, 'Not authenticated');
-    const body = await parseBody(req);
+    let body;
+    try { body = await parseBody(req); } catch (err) { return res.error(400, err.message); }
     const result = auth.verifyMfaLogin(config.dataDir, authResult.user.username, body.code);
     if (!result.success) return res.error(401, 'Invalid MFA code');
     const session = auth.createSession(result.user);
@@ -77,7 +79,8 @@ function registerAuthRoutes(router, config, modules) {
   router.post('/api/auth/mfa/enable', async (req, res) => {
     const authResult = authenticate(req, auth);
     if (!authResult.authenticated) return res.error(401, 'Not authenticated');
-    const body = await parseBody(req);
+    let body;
+    try { body = await parseBody(req); } catch (err) { return res.error(400, err.message); }
     const valid = cryptoMod.verifyTOTP(authResult.user.mfaSecret, body.code);
     if (!valid) return res.error(400, 'Invalid code');
     res.json(200, { success: true });
@@ -100,7 +103,8 @@ function registerAuthRoutes(router, config, modules) {
   router.post('/api/auth/change-password', async (req, res) => {
     const authResult = authenticate(req, auth);
     if (!authResult.authenticated) return res.error(401, 'Not authenticated');
-    const body = await parseBody(req);
+    let body;
+    try { body = await parseBody(req); } catch (err) { return res.error(400, err.message); }
     if (!body.oldPassword || !body.newPassword) return res.error(400, 'Old and new passwords required');
     if (body.newPassword.length < 8) return res.error(400, 'Password must be at least 8 characters');
     try {
@@ -115,7 +119,8 @@ function registerAuthRoutes(router, config, modules) {
   router.post('/api/auth/step-up', async (req, res) => {
     const authResult = authenticate(req, auth);
     if (!authResult.authenticated) return res.error(401, 'Not authenticated');
-    const body = await parseBody(req);
+    let body;
+    try { body = await parseBody(req); } catch (err) { return res.error(400, err.message); }
     if (!body.code) return res.error(400, 'MFA code required');
     const valid = auth.verifyMfaLogin(config.dataDir, authResult.user.username, body.code);
     if (!valid || !valid.success) return res.error(401, 'Invalid MFA code');

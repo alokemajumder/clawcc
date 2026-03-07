@@ -3,7 +3,7 @@
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
-const { hashPassword, verifyPassword, generateTOTPSecret, verifyTOTPCode } = require('./crypto');
+const { hashPassword, verifyPassword, generateTOTPSecret, verifyTOTPCode, generateRecoveryCodes, hashRecoveryCode, verifyRecoveryCode } = require('./crypto');
 
 // ── User store ──
 
@@ -36,9 +36,11 @@ function createAuthManager(opts = {}) {
       fs.mkdirSync(path.dirname(fp), { recursive: true });
       const data = [...users.values()].map(u => ({
         username: u.username, password: u.password, role: u.role,
-        mfaSecret: u.mfaSecret, mfaEnabled: u.mfaEnabled, createdAt: u.createdAt
+        mfaSecret: u.mfaSecret, mfaEnabled: u.mfaEnabled, createdAt: u.createdAt,
+        recoveryCodes: u.recoveryCodes || []
       }));
-      fs.writeFileSync(fp, JSON.stringify(data, null, 2));
+      // Non-blocking write to avoid blocking event loop on hot paths
+      fs.writeFile(fp, JSON.stringify(data, null, 2), () => {});
     } catch { /* ignore write errors */ }
   }
 
@@ -51,7 +53,8 @@ function createAuthManager(opts = {}) {
         users.set(u.username, {
           username: u.username, password: u.password, role: u.role,
           mfaSecret: u.mfaSecret || null, mfaEnabled: u.mfaEnabled || false,
-          createdAt: u.createdAt || Date.now()
+          createdAt: u.createdAt || Date.now(),
+          recoveryCodes: u.recoveryCodes || []
         });
       }
     } catch { /* no saved users yet */ }
@@ -140,8 +143,11 @@ function createAuthManager(opts = {}) {
     if (!user) throw new Error('User not found');
     const secret = generateTOTPSecret();
     user.mfaSecret = secret;
+    // Generate and store hashed recovery codes
+    const codes = generateRecoveryCodes(10);
+    user.recoveryCodes = codes.map(c => hashRecoveryCode(c));
     persistUsers();
-    return secret;
+    return { secret, recoveryCodes: codes };
   }
 
   function verifyMFA(username, code) {
@@ -167,6 +173,22 @@ function createAuthManager(opts = {}) {
     if (!session) return false;
     if (!session.stepUpAt) return false;
     return (Date.now() - session.stepUpAt) < stepUpWindow;
+  }
+
+  function useRecoveryCode(username, code) {
+    const user = users.get(username);
+    if (!user || !user.recoveryCodes) return false;
+    const idx = user.recoveryCodes.findIndex(h => verifyRecoveryCode(code, h));
+    if (idx === -1) return false;
+    user.recoveryCodes.splice(idx, 1); // one-time use
+    persistUsers();
+    return true;
+  }
+
+  function getStepUpAt(token) {
+    const session = sessions.get(token);
+    if (!session) return 0;
+    return session.stepUpAt || 0;
   }
 
   function createDefaultAdmin(password = 'admin') {
@@ -207,7 +229,7 @@ function createAuthManager(opts = {}) {
     createUser, authenticate, createSession, validateSession, destroySession,
     rotateSession, checkPermission, setupMFA, verifyMFA,
     stepUpAuth, requireStepUp, createDefaultAdmin, getUser, listUsers,
-    changePassword, updatePassword
+    changePassword, updatePassword, getStepUpAt, useRecoveryCode
   };
 }
 

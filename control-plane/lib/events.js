@@ -21,6 +21,7 @@ function createEventStore(opts = {}) {
 
   // Serialized write queue to prevent JSONL corruption under concurrent writes
   const writeQueue = [];
+  const maxWriteQueue = opts.maxWriteQueue || 10000;
   let writing = false;
 
   function drainWriteQueue() {
@@ -34,6 +35,7 @@ function createEventStore(opts = {}) {
   }
 
   function enqueueWrite(filePath, line) {
+    if (writeQueue.length >= maxWriteQueue) return; // backpressure: drop oldest writes
     writeQueue.push({ filePath, line });
     drainWriteQueue();
   }

@@ -40,8 +40,12 @@ function registerGovernanceRoutes(router, config, modules) {
     if (authResult.user.role !== 'ADMIN') return res.error(403, 'Admin required');
     const stepUp = requireStepUp(req, auth, config);
     if (!stepUp.authorized) return res.error(403, stepUp.reason);
-    const body = await parseBody(req);
-    fs.writeFileSync(path.join(policiesDir, req.params.id + '.policy.json'), JSON.stringify(body, null, 2));
+    // Validate policy ID to prevent path traversal
+    const policyId = req.params.id;
+    if (!policyId || /[^a-zA-Z0-9_-]/.test(policyId)) return res.error(400, 'Invalid policy ID');
+    let body;
+    try { body = await parseBody(req); } catch (err) { return res.error(400, err.message); }
+    fs.writeFileSync(path.join(policiesDir, policyId + '.policy.json'), JSON.stringify(body, null, 2));
     if (index) index.invalidatePolicyCache();
     audit.log({ actor: authResult.user.username, action: 'policy.updated', target: req.params.id, detail: JSON.stringify(body) });
     res.json(200, { success: true });
@@ -50,7 +54,8 @@ function registerGovernanceRoutes(router, config, modules) {
   router.post('/api/governance/policies/simulate', async (req, res) => {
     const authResult = authenticate(req, auth);
     if (!authResult.authenticated) return res.error(401, 'Not authenticated');
-    const body = await parseBody(req);
+    let body;
+    try { body = await parseBody(req); } catch (err) { return res.error(400, err.message); }
     const policies = loadPoliciesCached();
     const targetPolicy = policies.find(p => p.id === body.policyId);
     if (!targetPolicy) return res.error(404, 'Policy not found');
@@ -65,7 +70,8 @@ function registerGovernanceRoutes(router, config, modules) {
   router.post('/api/governance/approvals', async (req, res) => {
     const authResult = authenticate(req, auth);
     if (!authResult.authenticated) return res.error(401, 'Not authenticated');
-    const body = await parseBody(req);
+    let body;
+    try { body = await parseBody(req); } catch (err) { return res.error(400, err.message); }
     const approvalId = crypto.randomUUID();
     const request = {
       id: approvalId,
@@ -166,7 +172,8 @@ function registerGovernanceRoutes(router, config, modules) {
     if (authResult.user.role !== 'ADMIN') return res.error(403, 'Admin required');
     const stepUp = requireStepUp(req, auth, config);
     if (!stepUp.authorized) return res.error(403, stepUp.reason);
-    const body = await parseBody(req);
+    let body;
+    try { body = await parseBody(req); } catch (err) { return res.error(400, err.message); }
     const twPath = path.join(config.dataDir, '..', 'tripwires', 'default.tripwires.json');
     fs.writeFileSync(twPath, JSON.stringify(body, null, 2));
     audit.log({ actor: authResult.user.username, action: 'tripwires.updated', target: 'default' });
@@ -195,7 +202,8 @@ function registerGovernanceRoutes(router, config, modules) {
     const authResult = authenticate(req, auth);
     if (!authResult.authenticated) return res.error(401, 'Not authenticated');
     if (!auth.checkPermission(authResult.user, 'export:evidence')) return res.error(403, 'Insufficient permissions');
-    const body = await parseBody(req);
+    let body;
+    try { body = await parseBody(req); } catch (err) { return res.error(400, err.message); }
 
     // Check if client wants ZIP format (default) or JSON
     const format = body.format || 'zip';
@@ -257,7 +265,8 @@ function registerGovernanceRoutes(router, config, modules) {
   router.post('/api/governance/evidence/verify', async (req, res) => {
     const authResult = authenticate(req, auth);
     if (!authResult.authenticated) return res.error(401, 'Not authenticated');
-    const body = await parseBody(req);
+    let body;
+    try { body = await parseBody(req); } catch (err) { return res.error(400, err.message); }
     const result = receipts.verifyBundle(body);
     res.json(200, { success: true, verification: result });
   });
@@ -278,7 +287,8 @@ function registerGovernanceRoutes(router, config, modules) {
     if (authResult.user.role !== 'ADMIN') return res.error(403, 'Admin required');
     const stepUp = requireStepUp(req, auth, config);
     if (!stepUp.authorized) return res.error(403, stepUp.reason);
-    const body = await parseBody(req);
+    let body;
+    try { body = await parseBody(req); } catch (err) { return res.error(400, err.message); }
 
     // Verify Ed25519 signature before deploy
     if (body.signature && body.publicKey && body.bundle) {

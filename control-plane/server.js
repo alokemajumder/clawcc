@@ -59,7 +59,11 @@ const authManager = createAuthManager({
   stepUpWindow: config.auth ? config.auth.stepUpWindowMs || 300000 : 300000,
   dataDir: config.dataDir
 });
-authManager.createDefaultAdmin('changeme');
+const defaultAdminPw = config.auth && config.auth.defaultAdminPassword ? config.auth.defaultAdminPassword : 'changeme';
+authManager.createDefaultAdmin(defaultAdminPw);
+if (defaultAdminPw === 'changeme') {
+  console.warn('[SECURITY] Default admin password is "changeme" — change it immediately via /api/auth/change-password or config.auth.defaultAdminPassword');
+}
 
 // Auth adapter: route handlers call auth.authenticateUser(dataDir, user, pass) etc
 const auth = {
@@ -84,7 +88,8 @@ const auth = {
   getSession(token) {
     const user = authManager.validateSession(token);
     if (!user) return null;
-    return { ...user, lastStepUp: authManager.requireStepUp(token) ? Date.now() : 0 };
+    const stepUpAt = authManager.getStepUpAt ? authManager.getStepUpAt(token) : 0;
+    return { ...user, lastStepUp: stepUpAt };
   },
   checkPermission(user, action) {
     if (!user) return false;
@@ -96,8 +101,8 @@ const auth = {
     return false;
   },
   enableMfa(dataDir, username) {
-    const secret = authManager.setupMFA(username);
-    return { secret, qrUri: 'otpauth://totp/ClawCC:' + username + '?secret=' + secret + '&issuer=ClawCC', recoveryCodes: cryptoMod.generateRecoveryCodes() };
+    const result = authManager.setupMFA(username);
+    return { secret: result.secret, qrUri: 'otpauth://totp/ClawCC:' + username + '?secret=' + result.secret + '&issuer=ClawCC', recoveryCodes: result.recoveryCodes };
   },
   verifyMfaLogin(dataDir, username, code) {
     try {

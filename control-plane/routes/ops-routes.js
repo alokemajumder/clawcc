@@ -116,7 +116,8 @@ function registerOpsRoutes(router, config, modules) {
     const authResult = authenticate(req, auth);
     if (!authResult.authenticated) return res.error(401, 'Not authenticated');
     if (!auth.checkPermission(authResult.user, 'action:safe')) return res.error(403, 'Insufficient permissions');
-    const body = await parseBody(req);
+    let body;
+    try { body = await parseBody(req); } catch (err) { return res.error(400, err.message); }
     if (!body.path || body.content === undefined) return res.error(400, 'Path and content required');
     const allowedPaths = config.discovery ? config.discovery.paths || [] : ['~/.claude'];
     const result = sanitizePath(body.path, allowedPaths);
@@ -253,7 +254,8 @@ function registerOpsRoutes(router, config, modules) {
   router.post('/api/ops/notifications/subscribe', async (req, res) => {
     const authResult = authenticate(req, auth);
     if (!authResult.authenticated) return res.error(401, 'Not authenticated');
-    const body = await parseBody(req);
+    let body;
+    try { body = await parseBody(req); } catch (err) { return res.error(400, err.message); }
     if (!body.endpoint) return res.error(400, 'Subscription endpoint required');
     // Store subscription (deduplicate by endpoint)
     const existing = pushSubscriptions.findIndex(s => s.endpoint === body.endpoint);

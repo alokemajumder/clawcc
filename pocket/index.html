@@ -126,6 +126,10 @@
 
   <script>
     'use strict';
+    function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/pocket/sw.js').catch(() => {});
+    }
     const BASE = location.origin;
     let currentUser = null;
     let feedSource = null;
@@ -135,7 +139,9 @@
       const opts = { method, headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin' };
       if (body) opts.body = JSON.stringify(body);
       const res = await fetch(BASE + path, opts);
-      return res.json();
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Request failed');
+      return data;
     }
 
     async function doLogin() {
@@ -213,7 +219,7 @@
             const sev = data.severity || 'info';
             const item = document.createElement('div');
             item.className = 'feed-item ' + sev;
-            item.innerHTML = '<span class="time">' + (data.ts || '').slice(11, 19) + '</span> <span class="type">' + (data.type || '') + '</span> ' + (data.nodeId || '') + ' ' + ((data.payload && data.payload.preview) || '');
+            item.innerHTML = '<span class="time">' + esc((data.ts || '').slice(11, 19)) + '</span> <span class="type">' + esc(data.type || '') + '</span> ' + esc(data.nodeId || '') + ' ' + esc((data.payload && data.payload.preview) || '');
             list.prepend(item);
             while (list.children.length > 50) list.removeChild(list.lastChild);
           } catch (err) { /* ignore parse errors */ }
@@ -230,7 +236,7 @@
         const list = document.getElementById('node-list');
         if (typeof nodes === 'object' && !Array.isArray(nodes)) {
           list.innerHTML = Object.entries(nodes).map(([id, n]) =>
-            '<div class="node"><div><strong>' + (n.hostname || id) + '</strong><br><span style="color:var(--muted);font-size:0.8rem;">' + (n.tags || []).join(', ') + '</span></div><span class="badge ' + (n.status === 'online' ? 'badge-on' : 'badge-off') + '">' + (n.status || 'unknown') + '</span></div>'
+            '<div class="node"><div><strong>' + esc(n.hostname || id) + '</strong><br><span style="color:var(--muted);font-size:0.8rem;">' + (n.tags || []).map(t => esc(t)).join(', ') + '</span></div><span class="badge ' + (n.status === 'online' ? 'badge-on' : 'badge-off') + '">' + esc(n.status || 'unknown') + '</span></div>'
           ).join('');
         } else {
           list.innerHTML = '<p style="color:var(--muted)">No nodes registered</p>';
@@ -251,14 +257,14 @@
           return;
         }
         list.innerHTML = events.map(e =>
-          '<div class="alert ' + (e.severity || 'warning') + '"><div><strong>' + ((e.payload && e.payload.ruleId) || e.type) + '</strong><br><span style="color:var(--muted);font-size:0.8rem;">' + (e.ts || '').slice(0, 19).replace('T', ' ') + ' | ' + (e.nodeId || '') + '</span><br><span style="font-size:0.85rem;">' + ((e.payload && e.payload.reason) || '') + '</span></div></div>'
+          '<div class="alert ' + esc(e.severity || 'warning') + '"><div><strong>' + esc((e.payload && e.payload.ruleId) || e.type) + '</strong><br><span style="color:var(--muted);font-size:0.8rem;">' + esc((e.ts || '').slice(0, 19).replace('T', ' ')) + ' | ' + esc(e.nodeId || '') + '</span><br><span style="font-size:0.85rem;">' + esc((e.payload && e.payload.reason) || '') + '</span></div></div>'
         ).join('');
       } catch (e) { document.getElementById('alert-list').textContent = 'Failed to load'; }
     }
 
     function renderEmergency() {
       const el = document.getElementById('page-content');
-      const isAdmin = currentUser && (currentUser.role === 'ADMIN' || currentUser.role === 'OPERATOR');
+      const isAdmin = currentUser && (currentUser.role === 'admin' || currentUser.role === 'operator');
       el.innerHTML = '<h3 style="margin-bottom:12px;color:var(--text2);">Emergency Actions</h3>' +
         (isAdmin ? '<div class="card"><h3>Kill Session</h3><input type="text" id="kill-sess-id" placeholder="Session ID" style="width:100%;padding:10px;background:var(--glass);border:1px solid var(--border);border-radius:8px;color:var(--text);margin-bottom:8px;"><button class="emergency-btn" onclick="doKill(\'session\')">Kill Session</button></div>' +
         '<div class="card"><h3>Kill Node</h3><input type="text" id="kill-node-id" placeholder="Node ID" style="width:100%;padding:10px;background:var(--glass);border:1px solid var(--border);border-radius:8px;color:var(--text);margin-bottom:8px;"><button class="emergency-btn" onclick="doKill(\'node\')">Kill All on Node</button></div>' +

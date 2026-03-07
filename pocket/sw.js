@@ -35,8 +35,6 @@ self.addEventListener('push', (event) => {
   event.waitUntil(
     self.registration.showNotification(data.title || 'ClawCC Alert', {
       body: data.body || '',
-      icon: '/pocket/manifest.json',
-      badge: '/pocket/manifest.json',
       tag: data.tag || 'clawcc-alert',
       data: data.url || '/pocket/'
     })

@@ -1,11 +1,19 @@
 'use strict';
 const { parseBody } = require('../middleware/security');
-const { authenticate } = require('../middleware/auth-middleware');
+const { authenticate, verifyNodeSignature } = require('../middleware/auth-middleware');
 
 function registerEventRoutes(router, config, modules) {
-  const { auth, events, index, snapshots, receipts } = modules;
+  const { auth, events, index, snapshots, receipts, crypto: cryptoMod } = modules;
 
   router.post('/api/events/ingest', async (req, res) => {
+    // Authenticate: try HMAC node signature first, fall back to session cookie
+    const sigResult = verifyNodeSignature(req, config, cryptoMod);
+    if (!sigResult.valid) {
+      const authResult = authenticate(req, auth);
+      if (!authResult.authenticated) {
+        return res.error(401, 'Not authenticated');
+      }
+    }
     let body;
     try { body = await parseBody(req); } catch (err) { return res.error(400, err.message); }
     // Input validation
@@ -109,7 +117,8 @@ function registerEventRoutes(router, config, modules) {
   router.post('/api/sessions/:sessionId/compare', async (req, res) => {
     const authResult = authenticate(req, auth);
     if (!authResult.authenticated) return res.error(401, 'Not authenticated');
-    const body = await parseBody(req);
+    let body;
+    try { body = await parseBody(req); } catch (err) { return res.error(400, err.message); }
     const eventsA = events.query(config.dataDir, { sessionId: req.params.sessionId, limit: 1000 });
     const eventsB = events.query(config.dataDir, { sessionId: body.otherSessionId, limit: 1000 });
     const sessData = snapshots.load(config.dataDir, 'sessions');

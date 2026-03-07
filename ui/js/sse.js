@@ -13,7 +13,7 @@ const SSE = {
         const data = JSON.parse(e.data);
         const conn = this.connections.get(name);
         if (conn && conn.paused) {
-          conn.buffer.push(data);
+          if (conn.buffer.length < 1000) conn.buffer.push(data);
         } else {
           if (handlers.onEvent) handlers.onEvent(data);
         }
