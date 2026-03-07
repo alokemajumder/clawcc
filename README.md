@@ -1,4 +1,4 @@
-# ClawCC - Fleet Control Center
+# ClawCC - Fleet Control Center for AI Agents
 
 A self-hosted control plane for managing, monitoring, governing, and replaying a fleet of AI agent nodes. Zero external dependencies -- runs on Node.js stdlib alone.
 
@@ -19,7 +19,7 @@ A self-hosted control plane for managing, monitoring, governing, and replaying a
 - [Node Agent](#node-agent)
 - [Security](#security)
 - [Governance & Compliance](#governance--compliance)
-- [Third-Party Requirements](#third-party-requirements)
+- [Dependencies](#dependencies)
 - [Testing](#testing)
 - [Troubleshooting](#troubleshooting)
 - [Project Structure](#project-structure)
@@ -34,10 +34,10 @@ A self-hosted control plane for managing, monitoring, governing, and replaying a
 - **Hybrid Index Layer** -- In-memory indexes rebuilt from JSONL on boot; O(1) lookups instead of file scans
 - **SSE Real-Time Streaming** -- Server-Sent Events with filters, keepalive, and auto-cleanup
 - **Tailscale Networking** -- Tailnet-first node discovery and peer visibility
-- **Security Hardened** -- PBKDF2, TOTP MFA, HMAC signing, Ed25519, CSP nonces, ReDoS protection, request timeouts
+- **Security Hardened** -- PBKDF2, TOTP MFA, HMAC signing, Ed25519, CSP nonces, ReDoS protection, rate limiting
 - **Typed Safe Actions** -- Command and path allowlists; no remote shell access
 - **Intent Contracts** -- Drift scoring across 5 factors with enforcement ladder
-- **Policy Simulation Lab** -- Replay recorded sessions against candidate policies
+- **Policy Engine** -- Rule evaluation with ABAC conditions (environment, time windows, risk scores, node tags, roles)
 - **Digital Twin Replay** -- Session comparison and step-by-step replay with scrubber
 - **Topology Graph** -- Interactive SVG cognitive graph of agents, tools, files, and services
 - **Zero-Trust Sandbox** -- Path canonicalization, symlink resolution, traversal prevention
@@ -45,14 +45,13 @@ A self-hosted control plane for managing, monitoring, governing, and replaying a
 - **Signed Skills Registry** -- Ed25519 skill signing with canary rollout and auto-rollback
 - **Tamper-Evident Receipt Ledger** -- SHA-256 hash chains with daily Ed25519 root signing
 - **Mobile Ops (Pocket PWA)** -- Live feed, alerts, push notifications, and emergency kill with step-up auth
-- **4-Eyes Approval Workflow** -- Dual-approver mechanism for high-risk actions
-- **ABAC Policy Conditions** -- Environment tags, time windows, risk scores, node tags, role restrictions
+- **4-Eyes Approval Workflow** -- Dual-approver mechanism for high-risk actions with self-approve prevention
 - **Evidence Export** -- ZIP bundles with events, audit logs, receipts, and integrity hashes
 - **Activity Heatmap & Streaks** -- 30-day event visualization with streak tracking
 - **Usage Alerts** -- Configurable cost, token, and error rate thresholds with rolling windows
 - **Blast Radius Analysis** -- Per-session and per-node impact assessment
 - **Causality Explorer** -- Trace file/tool references across sessions
-- **Graceful Shutdown** -- Connection draining, snapshot flushing, signal handling
+- **Graceful Shutdown** -- Connection draining, snapshot flushing, write queue completion, signal handling
 
 ---
 
@@ -178,7 +177,7 @@ Navigate to [http://localhost:3400](http://localhost:3400)
 
 Default credentials: **admin** / **changeme**
 
-> **Important:** Change the default password immediately after first login via the UI settings or API.
+> **Important:** Change the default password immediately after first login. In production mode (`"mode": "production"`), the server refuses to start with the default password.
 
 ### 5. Generate Demo Data (Optional)
 
@@ -233,13 +232,13 @@ Copy from `config/clawcc.config.example.json` and customize:
   // --- Server ---
   "mode": "local",                    // "local" or "fleet"
   "host": "0.0.0.0",                  // Bind address
-  "port": 3400,                       // HTTP port
+  "port": 3400,                       // HTTP port (validated: 1-65535)
   "dataDir": "./data",                // Data storage directory
 
   // --- HTTPS (optional) ---
   "httpsEnabled": false,              // Enable HTTPS
-  "httpsKeyPath": "/path/to/key.pem", // TLS private key
-  "httpsCertPath": "/path/to/cert.pem", // TLS certificate
+  "httpsKeyPath": "/path/to/key.pem", // TLS private key (validated: file must exist)
+  "httpsCertPath": "/path/to/cert.pem", // TLS certificate (validated: file must exist)
 
   // --- Secrets ---
   "sessionSecret": "CHANGE_ME_...",   // Used for HMAC verification (generate with openssl rand -hex 32)
@@ -251,13 +250,16 @@ Copy from `config/clawcc.config.example.json` and customize:
     "sessionTtlMs": 86400000,         // Session lifetime: 24 hours
     "lockoutAttempts": 5,             // Failed login attempts before lockout
     "lockoutDurationMs": 900000,      // Lockout duration: 15 minutes
-    "stepUpWindowMs": 300000          // Step-up auth validity: 5 minutes
+    "stepUpWindowMs": 300000,         // Step-up auth validity: 5 minutes
+    "defaultAdminPassword": "changeme" // Initial admin password (must change in production)
   },
 
   // --- Fleet ---
   "fleet": {
     "heartbeatTimeoutMs": 60000,      // Mark node offline after this duration
-    "maxNodes": 100                   // Maximum registered nodes
+    "maxNodes": 100,                  // Maximum registered nodes
+    "nodeSecrets": {},                // Per-node HMAC secrets (optional, falls back to sessionSecret)
+    "signatureMaxAge": 300000         // Max age for signed requests: 5 minutes
   },
 
   // --- Events ---
@@ -277,7 +279,10 @@ Copy from `config/clawcc.config.example.json` and customize:
   "security": {
     "rateLimitWindowMs": 60000,       // Rate limit window: 1 minute
     "rateLimitMaxRequests": 100,      // Max requests per window per IP
-    "requestTimeoutMs": 30000         // Request timeout: 30 seconds
+    "authRateLimitMaxRequests": 10,   // Auth endpoint limit per minute per IP
+    "requestTimeoutMs": 30000,        // Request timeout: 30 seconds
+    "csrfEnabled": true,              // CSRF protection
+    "corsOrigins": []                 // CORS allowed origins (empty = same-origin only)
   },
 
   // --- Tailscale (optional) ---
@@ -465,12 +470,14 @@ Edit `clawcc.config.json`:
     "sessionTtlMs": 28800000,
     "lockoutAttempts": 3,
     "lockoutDurationMs": 1800000,
-    "stepUpWindowMs": 180000
+    "stepUpWindowMs": 180000,
+    "defaultAdminPassword": "YOUR_STRONG_PASSWORD_HERE"
   },
   "security": {
     "rateLimitWindowMs": 60000,
     "rateLimitMaxRequests": 200,
-    "requestTimeoutMs": 30000
+    "requestTimeoutMs": 30000,
+    "corsOrigins": []
   },
   "events": {
     "retentionDays": 365
@@ -625,14 +632,16 @@ All API endpoints require authentication via session cookie (`clawcc_session`) u
 
 | Method | Endpoint | Description | Auth Required |
 |--------|----------|-------------|:---:|
-| POST | `/api/auth/login` | Login with username/password | No |
+| POST | `/api/auth/login` | Login with username/password (rate-limited: 10/min/IP) | No |
 | POST | `/api/auth/logout` | End session | Yes |
 | GET | `/api/auth/me` | Get current user info | Yes |
 | POST | `/api/auth/change-password` | Change password | Yes |
 | POST | `/api/auth/mfa/setup` | Generate MFA secret and QR URI | Yes |
-| POST | `/api/auth/mfa/verify` | Verify MFA code during login | Yes |
+| POST | `/api/auth/mfa/verify` | Verify MFA code during login (upgrades pending session) | Yes |
 | POST | `/api/auth/mfa/enable` | Enable MFA with verification code | Yes |
 | POST | `/api/auth/step-up` | Re-verify MFA for high-risk operations | Yes |
+
+**Login flow:** When MFA is enabled, login creates a short-lived (5 min) pending session that only has access to the MFA verify endpoint. After successful MFA verification, the session is upgraded to a full session with the user's normal TTL.
 
 **Login example:**
 
@@ -650,8 +659,8 @@ curl -b cookies.txt http://localhost:3400/api/auth/me
 
 | Method | Endpoint | Description | Permission |
 |--------|----------|-------------|------------|
-| POST | `/api/fleet/register` | Register a node | None (agent) |
-| POST | `/api/fleet/heartbeat` | Node heartbeat | None (agent) |
+| POST | `/api/fleet/register` | Register a node | HMAC-signed |
+| POST | `/api/fleet/heartbeat` | Node heartbeat | HMAC-signed |
 | GET | `/api/fleet/nodes` | List all nodes | read |
 | GET | `/api/fleet/nodes/:nodeId` | Get node details | read |
 | GET | `/api/fleet/nodes/:nodeId/sessions` | Get node's sessions | read |
@@ -664,7 +673,7 @@ curl -b cookies.txt http://localhost:3400/api/auth/me
 
 | Method | Endpoint | Description | Permission |
 |--------|----------|-------------|------------|
-| POST | `/api/events/ingest` | Ingest a new event | None (agent) |
+| POST | `/api/events/ingest` | Ingest a new event | HMAC-signed or session |
 | GET | `/api/events/stream` | SSE real-time event stream | read |
 | GET | `/api/events/query` | Query events with filters | read |
 | GET | `/api/events/heatmap` | 30-day activity heatmap | read |
@@ -687,11 +696,11 @@ curl -b cookies.txt http://localhost:3400/api/auth/me
 | Method | Endpoint | Description | Permission |
 |--------|----------|-------------|------------|
 | GET | `/api/ops/health` | System health (CPU, RAM, uptime) | read |
-| GET | `/api/ops/health/history` | Health history (1 hour) | read |
+| GET | `/api/ops/health/history` | Health history (1 hour at 5s intervals) | read |
 | GET | `/api/ops/usage` | Usage statistics | read |
 | GET | `/api/ops/usage/breakdown` | Usage breakdown by provider | read |
 | GET | `/api/ops/usage/alerts` | Current usage alerts | read |
-| GET | `/api/ops/usage/rolling` | Rolling usage window | read |
+| GET | `/api/ops/usage/rolling` | Rolling usage window (`?window=1h\|24h\|7d`) | read |
 | GET | `/api/ops/memory` | Agent memory files | read |
 | GET | `/api/ops/workspace/files` | List workspace files | read |
 | GET | `/api/ops/workspace/file` | Read a workspace file | read |
@@ -717,7 +726,7 @@ curl -b cookies.txt http://localhost:3400/api/auth/me
 | POST | `/api/governance/approvals` | Create approval request | read |
 | GET | `/api/governance/approvals` | List pending approvals | read |
 | GET | `/api/governance/approvals/:id` | Get approval details | read |
-| POST | `/api/governance/approvals/:id/grant` | Grant approval | action |
+| POST | `/api/governance/approvals/:id/grant` | Grant approval (self-approve prevented) | action |
 | POST | `/api/governance/approvals/:id/deny` | Deny approval | read |
 | GET | `/api/governance/tripwires` | List tripwire definitions | read |
 | PUT | `/api/governance/tripwires` | Update tripwires | admin + step-up |
@@ -726,7 +735,7 @@ curl -b cookies.txt http://localhost:3400/api/auth/me
 | POST | `/api/governance/evidence/export` | Export evidence bundle (ZIP) | audit |
 | POST | `/api/governance/evidence/verify` | Verify evidence bundle | read |
 | GET | `/api/governance/skills` | List skills registry | read |
-| POST | `/api/governance/skills/:id/deploy` | Deploy a skill | admin + step-up |
+| POST | `/api/governance/skills/:id/deploy` | Deploy a skill (Ed25519 verified) | admin + step-up |
 | POST | `/api/governance/skills/:id/rollback` | Rollback a skill | admin |
 | GET | `/api/governance/access-review` | List users for access review | audit |
 | GET | `/api/governance/receipts/verify` | Verify receipt chain | read |
@@ -758,7 +767,8 @@ The CLI provides 18 commands for interacting with the control plane from the ter
 # Initialize CLI configuration and generate keys
 node cli/clawcc.js init
 
-# Configuration is stored in ~/.clawcc/config.json
+# Generate Ed25519 key pair
+node cli/clawcc.js keygen
 ```
 
 ### Commands
@@ -785,7 +795,7 @@ node cli/clawcc.js policy-apply --file policy.json [--host URL]
 # Simulate policy on a session
 node cli/clawcc.js policy-simulate --session SESSION_ID [--host URL]
 
-# Kill a session (requires step-up MFA)
+# Kill a session (requires admin + step-up MFA)
 node cli/clawcc.js kill-session --id SESSION_ID [--host URL]
 
 # Kill a node
@@ -794,7 +804,7 @@ node cli/clawcc.js kill-node --id NODE_ID [--host URL]
 # Global kill switch
 node cli/clawcc.js kill-global [--host URL]
 
-# Verify receipt chain integrity
+# Verify receipt chain / evidence bundle integrity
 node cli/clawcc.js verify <evidence-bundle.json>
 
 # Export evidence bundle
@@ -806,11 +816,11 @@ node cli/clawcc.js users [--host URL] [--format table|json]
 # Create a user
 node cli/clawcc.js user-create [--host URL]
 
+# Access review
+node cli/clawcc.js access-review [--host URL]
+
 # Verify receipts for a date
 node cli/clawcc.js receipts-verify [--date YYYY-MM-DD] [--host URL]
-
-# Generate Ed25519 key pair
-node cli/clawcc.js keygen
 
 # Enroll this machine as a node
 node cli/clawcc.js enroll [--host URL]
@@ -837,22 +847,26 @@ The web UI is a single-page application (SPA) served at the root URL with a glas
 
 ### Pages
 
-| Page | Description |
-|------|-------------|
-| **Dashboard** | Fleet overview, node status, session counts, health metrics |
-| **Live Feed** | Real-time event stream with filters, activity heatmap, streak badge |
-| **Sessions** | Session list with drill-down, timeline, blast radius, drift analysis, compare, replay |
-| **Fleet** | Node management, topology graph, blast radius, node actions |
-| **Governance** | Policies, tripwires, approvals, skills, audit log, evidence export |
-| **Ops** | System health, usage, workspace files, git status, cron, logs, Tailscale |
-| **Settings** | User profile, password change, MFA setup, access review |
+| Key | Page | Description |
+|-----|------|-------------|
+| 1 | **Fleet** | Node management, topology graph, blast radius, node actions |
+| 2 | **Sessions** | Session list with drill-down, timeline, blast radius, drift analysis, compare, replay |
+| 3 | **Live Feed** | Real-time event stream with filters, activity heatmap, streak badge |
+| 4 | **Usage** | Provider/model cost tracking, rolling windows, usage alerts |
+| 5 | **Memory & Files** | Agent memory viewer, workspace file browser with diff-before-save |
+| 6 | **Ops** | System health, cron, logs, git status, Tailscale |
+| 7 | **Governance** | Policies, tripwires, approvals, skills, audit log, evidence export |
 
-### Accessing the UI
+### Keyboard Shortcuts
 
-```
-http://localhost:3400          # Main dashboard
-http://localhost:3400/pocket/  # Mobile PWA
-```
+| Key | Action |
+|-----|--------|
+| `1`-`7` | Navigate to page |
+| `/` | Focus search |
+| `Space` | Pause/resume live feed |
+| `Esc` | Close modal/panel |
+| `?` | Toggle keyboard help |
+| `k` | Kill switch modal (admin only) |
 
 ---
 
@@ -860,21 +874,11 @@ http://localhost:3400/pocket/  # Mobile PWA
 
 The Pocket PWA is a mobile-optimized interface at `/pocket/`:
 
-### Features
-
 - Live event feed with severity filtering
-- Alert notifications (push notification support)
+- Alert notifications (push notification support via service worker)
 - Emergency kill switch with step-up MFA
 - Offline caching via service worker
-- Installable as a home screen app (Add to Home Screen)
-
-### Push Notifications
-
-1. Open the Pocket PWA
-2. Go to the Alerts tab
-3. Click "Enable Notifications"
-4. Grant browser notification permission
-5. Notifications are sent for critical events
+- Installable as a home screen app
 
 ### Android (Termux) Deployment
 
@@ -896,29 +900,19 @@ See `termux/README.md` for details.
 
 The node agent runs on each machine you want to monitor and manages:
 
-- **Registration**: Enrolls with the control plane on startup
-- **Heartbeat**: Sends periodic health data (CPU, RAM, load)
+- **Registration**: Enrolls with the control plane on startup via HMAC-signed request
+- **Heartbeat**: Sends periodic health data (CPU, RAM, disk)
 - **Telemetry**: Discovers and reports sessions, memory files, git activity
-- **Sandbox**: Executes typed safe actions within allowlist constraints
-- **Offline Spool**: Queues events locally when the control plane is unreachable
-
-### Running the Agent
-
-```bash
-# Configure
-cp config/node-agent.config.example.json node-agent.config.json
-# Edit nodeId, controlPlaneUrl, and nodeSecret
-
-# Start
-node node-agent/agent.js
-```
+- **Sandbox**: Executes typed safe actions within allowlist constraints (uses `execFileSync`, not shell)
+- **Offline Spool**: Queues events locally when the control plane is unreachable (100MB size limit, atomic writes)
 
 ### Agent Security
 
-- All requests to the control plane are HMAC-signed
+- All requests to the control plane are HMAC-signed with nonce replay prevention
 - No shell commands are exposed -- only typed safe actions via allowlists
 - Path access is sandboxed with symlink resolution and traversal prevention
-- Offline events are spooled to disk and replayed when connectivity returns
+- Discovery redacts secrets and strips credentials from git URLs
+- Offline events are spooled to disk with atomic writes and replayed when connectivity returns
 
 ---
 
@@ -930,14 +924,15 @@ ClawCC is designed to be secure by default. See [SECURITY_ARCHITECTURE.md](SECUR
 
 | Layer | Controls |
 |-------|----------|
-| **Authentication** | PBKDF2 (100K iterations, SHA-512), TOTP MFA, session cookies (HttpOnly, SameSite, Secure) |
-| **Authorization** | RBAC (viewer/operator/auditor/admin), ABAC conditions, step-up auth, 4-eyes approval |
-| **Network** | Tailscale WireGuard, HMAC request signing, nonce replay prevention, optional TLS |
-| **Input** | Body size limits (1MB), event payload limits (64KB), type validation, ReDoS-safe regex |
-| **Output** | Secret redaction, CSP nonces, security headers (HSTS, X-Frame-Options, etc.) |
-| **Data** | Append-only JSONL, SHA-256 hash chains, Ed25519 signatures, serialized async writes |
-| **Runtime** | Rate limiting, request timeouts (30s), graceful shutdown, uncaught exception handlers |
-| **Sandbox** | Command allowlists, path allowlists, symlink resolution, traversal prevention |
+| **Authentication** | PBKDF2 (100K iterations, SHA-512), TOTP MFA with recovery codes, MFA-pending session lifecycle, session cookies (HttpOnly, SameSite=Lax, Secure) |
+| **Authorization** | RBAC (viewer/operator/auditor/admin), ABAC conditions, step-up auth, 4-eyes approval with self-approve prevention |
+| **Network** | Tailscale WireGuard, HMAC request signing, nonce replay prevention, CORS (configurable origins), optional TLS |
+| **Input** | Body size limits (1MB), event payload limits (64KB), type validation, ReDoS-safe regex (200 char limit, dangerous pattern detection) |
+| **Output** | Secret redaction, CSP nonces (per-request), security headers (HSTS, X-Frame-Options, X-Content-Type-Options, Permissions-Policy) |
+| **Data** | Append-only JSONL, SHA-256 hash chains, Ed25519 signatures, serialized async write queue with backpressure logging |
+| **Runtime** | Rate limiting (100 req/min general, 10/min auth), request timeouts (30s), graceful shutdown, uncaught exception handlers |
+| **Sandbox** | Command allowlists with argument constraints, path allowlists, symlink resolution, `execFileSync` (no shell), traversal prevention |
+| **Memory** | In-memory event cap (500K), session eviction (50K cap, 30-day expiry), rate limit map eviction (10K IPs), regex cache cap (1K) |
 
 ### Changing the Admin Password
 
@@ -954,8 +949,8 @@ curl -b cookies.txt -X POST http://localhost:3400/api/auth/change-password \
 # Get MFA secret and QR URI
 curl -b cookies.txt -X POST http://localhost:3400/api/auth/mfa/setup
 
-# Verify with code from authenticator app
-curl -b cookies.txt -X POST http://localhost:3400/api/auth/mfa/verify \
+# Enable MFA with code from authenticator app
+curl -b cookies.txt -X POST http://localhost:3400/api/auth/mfa/enable \
   -H "Content-Type: application/json" \
   -d '{"code":"123456"}'
 ```
@@ -964,10 +959,10 @@ curl -b cookies.txt -X POST http://localhost:3400/api/auth/mfa/verify \
 
 | Role | Permissions | Use Case |
 |------|------------|----------|
-| `viewer` | Read-only access | Dashboard monitoring |
-| `operator` | Read + execute safe actions | Day-to-day operations |
-| `auditor` | Read + audit logs + evidence export | Compliance auditing |
-| `admin` | Full access | System administration |
+| `viewer` | `read` | Dashboard monitoring |
+| `operator` | `read`, `action` | Day-to-day operations |
+| `auditor` | `read`, `audit` | Compliance auditing, evidence export |
+| `admin` | `read`, `action`, `admin`, `audit` | Full system administration |
 
 ---
 
@@ -1004,7 +999,7 @@ node cli/clawcc.js verify evidence-bundle.json
 
 ---
 
-## Third-Party Requirements
+## Dependencies
 
 ClawCC has **zero runtime dependencies**. No npm packages are used. Everything runs on the Node.js standard library.
 
@@ -1012,7 +1007,7 @@ ClawCC has **zero runtime dependencies**. No npm packages are used. Everything r
 
 | Dependency | Version | Notes |
 |------------|---------|-------|
-| **Node.js** | >= 18.0.0 | The only requirement. Uses `node:crypto`, `node:fs`, `node:http`, `node:os`, `node:path`, `node:url`, `node:child_process`, `node:test`, `node:assert` |
+| **Node.js** | >= 18.0.0 | Uses `node:crypto`, `node:fs`, `node:http`, `node:os`, `node:path`, `node:url`, `node:child_process`, `node:test`, `node:assert` |
 
 ### Optional (Infrastructure)
 
@@ -1024,6 +1019,7 @@ ClawCC has **zero runtime dependencies**. No npm packages are used. Everything r
 | **systemd** | Process management, auto-restart | Linux production servers |
 | **Docker** | Container deployment | Containerized environments |
 | **pm2** | Node.js process manager | Alternative to systemd |
+| **Git** | Reads `git log` / `git status` on the ops workspace page | Ops workspace features |
 
 ### No External APIs Required
 
@@ -1035,14 +1031,6 @@ ClawCC does not call any external APIs, cloud services, or SaaS platforms. It is
 - No external authentication providers (built-in auth only)
 - All cryptography uses Node.js `node:crypto` (OpenSSL under the hood)
 
-### Optional Integrations
-
-| Integration | Type | Description |
-|-------------|------|-------------|
-| **Tailscale** | CLI tool | Reads `tailscale status --json` for network topology. Install separately. |
-| **Git** | CLI tool | Reads `git log` / `git status` on the ops workspace page. Standard install. |
-| **crontab** | System tool | Reads `crontab -l` for cron job display. Available on all Unix systems. |
-
 ---
 
 ## Testing
@@ -1050,23 +1038,33 @@ ClawCC does not call any external APIs, cloud services, or SaaS platforms. It is
 Run the full test suite:
 
 ```bash
-# Using npm
+# Run all unit tests (10 suites)
 npm test
 
-# Direct
-node --test test/**/*.test.js
+# Run E2E smoke tests (starts a real server)
+node test/e2e-smoke.js
+
+# Run a specific suite
+node --test test/auth/auth.test.js
 ```
 
-The suite includes 122 tests across 6 modules:
+231 tests across 11 suites, all passing:
 
 | Suite | Tests | Covers |
 |-------|-------|--------|
-| Crypto | 27 | PBKDF2, TOTP, HMAC, Ed25519, hash chains, nonces |
-| Auth | 25 | User creation, login, lockout, sessions, RBAC, MFA, password change |
-| Sandbox | 18 | Allowlists, path traversal, symlink resolution |
-| Policy | 20 | Rule evaluation, drift scoring, enforcement, simulation, ReDoS protection |
+| Crypto | 27 | PBKDF2, TOTP, HMAC, Ed25519, hash chains, nonces, recovery codes |
+| Auth | 34 | User CRUD, login, lockout, sessions, RBAC, MFA, MFA-pending, password change |
+| Sandbox | 18 | Allowlists, path traversal, symlink resolution, argument validation |
+| Policy | 41 | Rule evaluation, drift scoring, enforcement, simulation, ABAC conditions, ReDoS protection |
 | Receipts | 12 | Hash chains, Ed25519 signing, bundle verification |
 | Events | 20 | Ingestion, redaction, size limits, subscriptions, queries, async writes |
+| Intent | 24 | Intent contracts, drift scoring (5 factors), session ID validation, path traversal prevention |
+| Middleware | 11 | Session authentication, MFA-pending blocking, node signature verification, nonce replay |
+| Router | 21 | Route matching, params, query parsing, cookie parsing, setCookie |
+| ZIP | 11 | ZIP format, CRC-32, file entries, validation |
+| E2E Smoke | 12 | Server startup, auth flow, security headers, static files, health endpoint, 404 handling |
+
+Tests use `node:test` and `node:assert/strict` -- no external test frameworks.
 
 ---
 
@@ -1083,6 +1081,9 @@ lsof -i :3400
 
 # Run with debug output
 node control-plane/server.js 2>&1 | head -50
+
+# Check config is valid JSON
+node -e "JSON.parse(require('fs').readFileSync('clawcc.config.json','utf8'))"
 ```
 
 ### Agent can't connect to control plane
@@ -1091,23 +1092,22 @@ node control-plane/server.js 2>&1 | head -50
 # Test connectivity
 curl http://CONTROL_PLANE_IP:3400/healthz
 
-# Check agent config
-cat node-agent.config.json | node -e "console.log(JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')).controlPlaneUrl)"
-
 # Verify shared secret matches
 # The nodeSecret in agent config must match the sessionSecret in control plane config
+# (or match the per-node secret in fleet.nodeSecrets)
 ```
 
 ### MFA not working
 
-- Ensure your device clock is synchronized (TOTP is time-based, 30-second window)
-- Recovery codes from MFA setup can be used as one-time codes
+- Ensure your device clock is synchronized (TOTP is time-based, 30-second window with +/-1 step tolerance)
+- Recovery codes from MFA setup can be used as one-time codes (timing-safe verified)
 - Admin can reset MFA for a user via the API
 
 ### High memory usage
 
-- The in-memory index grows with event count (capped at 500K events)
-- Check index stats: events are evicted from memory but persist on disk
+- The in-memory index caps at 500K events (oldest evicted, persisted on disk)
+- Sessions capped at 50K in-memory (ended sessions older than 30 days evicted)
+- Rate limit maps evict expired entries above 10K IPs
 - Restart the server to rebuild indexes from disk
 
 ### Events not appearing in UI
@@ -1120,6 +1120,10 @@ curl -b cookies.txt "http://localhost:3400/api/events/query?limit=5"
 curl -N -b cookies.txt http://localhost:3400/api/events/stream
 ```
 
+### Default password rejected in production
+
+When `mode` is set to `"production"`, the server refuses to start if the admin password is still `"changeme"`. Set `auth.defaultAdminPassword` to a strong password in your config.
+
 ---
 
 ## Project Structure
@@ -1127,48 +1131,49 @@ curl -N -b cookies.txt http://localhost:3400/api/events/stream
 ```
 clawcc/
   control-plane/
-    server.js                 HTTP server, module initialization, request handling
+    server.js                 HTTP server, module initialization, CORS, config validation
     lib/
-      auth.js                 User management, sessions, RBAC, MFA
+      auth.js                 User management, sessions, RBAC, MFA, MFA-pending lifecycle
       audit.js                Append-only audit logging with hash chains
-      crypto.js               PBKDF2, TOTP, HMAC, Ed25519, hash chains
-      events.js               Event store with async write queue
-      index.js                Hybrid in-memory index layer
-      intent.js               Intent contracts and drift scoring
-      policy.js               Policy engine with ABAC, ReDoS-safe regex
-      receipts.js             Receipt ledger with Ed25519 signing
-      router.js               HTTP router with :param support
-      snapshots.js            Session/usage/health/topology snapshots
+      crypto.js               PBKDF2, TOTP, HMAC, Ed25519, hash chains, recovery codes
+      events.js               Event store with async write queue and backpressure logging
+      index.js                Hybrid in-memory index layer (500K event cap)
+      intent.js               Intent contracts and drift scoring (5 factors)
+      policy.js               Policy engine with ABAC conditions, ReDoS-safe regex
+      receipts.js             Receipt ledger with Ed25519 signing and JSONL persistence
+      router.js               HTTP router with :param support, safe URI decoding
+      snapshots.js            Session/usage/health/topology snapshots with eviction
       zip.js                  ZIP file builder (deflateRaw + CRC-32)
     middleware/
-      auth-middleware.js       Session auth, step-up auth, node signature verification
-      security.js              Security headers, rate limiting, body parsing, path sanitization
+      auth-middleware.js       Session auth, MFA-pending blocking, step-up, node HMAC verification
+      security.js              Security headers, CSP nonces, rate limiting, body parsing
     routes/
-      auth-routes.js           Authentication endpoints
-      event-routes.js          Event ingestion, streaming, sessions, heatmap, replay
-      fleet-routes.js          Node management, topology, blast radius
+      auth-routes.js           Login, logout, MFA, password, step-up
+      event-routes.js          Ingest, SSE stream, query, sessions, heatmap, replay
+      fleet-routes.js          Node register, heartbeat, actions, topology
       governance-routes.js     Policies, approvals, tripwires, skills, audit, evidence
       kill-switch.js           Emergency kill switch (session/node/global)
       ops-routes.js            Health, usage, workspace, cron, logs, notifications
   node-agent/
     agent.js                  Node agent daemon
     lib/
-      discovery.js             Session and workspace discovery
-      sandbox.js               Command/path sandbox with allowlists
-      spool.js                 Offline event spooling
-      telemetry.js             Health and performance telemetry
+      discovery.js             Session and workspace discovery with secret redaction
+      sandbox.js               Command/path sandbox with allowlists, execFileSync
+      spool.js                 Offline event spooling (100MB limit, atomic writes)
+      telemetry.js             Health telemetry with execFileSync, bounded history
   ui/
     index.html                SPA entry point
     css/main.css              Glassmorphic dark theme
     js/
       api.js                   API client
-      app.js                   SPA router and initialization
+      app.js                   SPA router, keyboard shortcuts, login, modals
+      sse.js                   SSE client (connect, pause, resume, reconnect)
       pages.js                 Page renderers (7 pages)
   cli/
     clawcc.js                 CLI tool (18 commands)
   pocket/
     index.html                Mobile PWA
-    sw.js                     Service worker (offline, push notifications)
+    sw.js                     Service worker (offline caching, push notifications)
     manifest.json             PWA manifest
   termux/
     setup.sh                  Android Termux setup script
@@ -1184,13 +1189,38 @@ clawcc/
   tripwires/
     default.tripwires.json    Honeytoken definitions
   skills/
-    registry.json             Skills registry
+    registry.json             Skills registry with canary config
   scripts/
     generate-demo-data.js     Demo data generator (30 days, 3 nodes)
-  test/                       6 test suites (122 tests)
+  test/
+    run-all.js                Test runner (10 unit suites)
+    auth/crypto.test.js       27 tests: PBKDF2, TOTP, HMAC, Ed25519, chains, nonces
+    auth/auth.test.js         34 tests: users, sessions, RBAC, MFA, MFA-pending
+    sandbox/sandbox.test.js   18 tests: allowlists, traversal, symlinks
+    policy/policy.test.js     41 tests: rules, drift, enforcement, ABAC, ReDoS
+    receipts/receipts.test.js 12 tests: chains, signing, bundles
+    events/events.test.js     20 tests: ingest, redact, size, subscribe, query
+    intent/intent.test.js     24 tests: contracts, drift, path traversal
+    middleware/auth-middleware.test.js  11 tests: auth, MFA-pending, HMAC, nonce replay
+    router/router.test.js     21 tests: routing, params, cookies, query
+    zip/zip.test.js           11 tests: ZIP format, CRC-32, validation
+    e2e-smoke.js              12 tests: server startup, auth, headers, static files
   SECURITY_ARCHITECTURE.md    Threat model and security controls
   COMPLIANCE_PACK.md          SOC 2 / ISO 27001 / NIST CSF mappings
+  PROGRESS.md                 Development progress tracker
 ```
+
+---
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature/my-feature`
+3. Make your changes (no external dependencies allowed)
+4. Run tests: `npm test && node test/e2e-smoke.js`
+5. Submit a pull request
+
+All code must use Node.js stdlib only. No `npm install`, no external packages.
 
 ---
 
