@@ -1,57 +1,91 @@
-# ClawCC - Fleet Control Center for AI Agents
+<div align="center">
 
-A self-hosted control plane for managing, monitoring, governing, and replaying a fleet of AI agent nodes. Zero external dependencies -- runs on Node.js stdlib alone.
+# ClawCC
+
+### Fleet Control Center for AI Agents
+
+[![Node.js](https://img.shields.io/badge/Node.js-%3E%3D18.0-339933?style=flat-square&logo=node.js&logoColor=white)](https://nodejs.org)
+[![Dependencies](https://img.shields.io/badge/dependencies-0-brightgreen?style=flat-square)](package.json)
+[![Tests](https://img.shields.io/badge/tests-234%20passing-brightgreen?style=flat-square)](test/)
+[![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square)](CONTRIBUTING.md)
+
+**Self-hosted mission control for managing, monitoring, governing, and replaying AI agent fleets.**
+**Zero external dependencies. Pure Node.js. Air-gappable.**
+
+[Quick Start](#quick-start) | [Documentation](#api-reference) | [Security](#security) | [Contributing](#contributing)
+
+</div>
 
 ---
 
-## Table of Contents
+## Why ClawCC?
 
-- [Features](#features)
-- [Architecture](#architecture)
-- [Prerequisites](#prerequisites)
-- [Quick Start](#quick-start)
-- [Configuration Reference](#configuration-reference)
-- [Deployment Guide](#deployment-guide)
-- [API Reference](#api-reference)
-- [CLI Reference](#cli-reference)
-- [UI Dashboard](#ui-dashboard)
-- [Mobile Ops (Pocket PWA)](#mobile-ops-pocket-pwa)
-- [Node Agent](#node-agent)
-- [Security](#security)
-- [Governance & Compliance](#governance--compliance)
-- [Dependencies](#dependencies)
-- [Testing](#testing)
-- [Troubleshooting](#troubleshooting)
-- [Project Structure](#project-structure)
-- [License](#license)
+AI agents are powerful but opaque. When you run a fleet of them -- across machines, teams, or environments -- you need visibility, control, and accountability. ClawCC gives you all three without vendor lock-in or dependency bloat.
+
+| Problem | ClawCC Solution |
+|---------|----------------|
+| "What did my agents do?" | Append-only event ledger with session replay, timeline, and causality tracing |
+| "Are my agents drifting from intent?" | Intent contracts with 5-factor drift scoring and enforcement ladders |
+| "How do I stop a rogue agent?" | Emergency kill switch (session/node/global) with step-up MFA |
+| "Can I prove compliance?" | Hash-chained audit trails, Ed25519 signed receipts, ZIP evidence export |
+| "Do I need to install 500 npm packages?" | Zero. Not one. Pure Node.js stdlib. |
+
+---
+
+## Key Highlights
+
+**Zero Dependencies** -- No `npm install`. No `node_modules`. No supply chain risk. The entire project runs on Node.js stdlib (`node:crypto`, `node:fs`, `node:http`).
+
+**Real-Time Observability** -- SSE live feed, activity heatmaps, streak tracking, interactive topology graph, blast radius analysis, and causality explorer.
+
+**Security-First** -- PBKDF2 (100K iterations), TOTP MFA, HMAC-signed requests, Ed25519 signatures, CSP nonces, ReDoS protection, rate limiting, auto-secret-redaction.
+
+**Compliance-Ready** -- SOC 2, ISO 27001, and NIST CSF control mappings with machine-verifiable evidence artifacts.
+
+**Portable** -- Runs anywhere Node.js does: bare metal, Docker, Termux on Android, behind Tailscale mesh VPN.
 
 ---
 
 ## Features
 
-- **Zero Dependencies** -- No `npm install` required; pure Node.js stdlib (`node:crypto`, `node:fs`, `node:http`, etc.)
+<details>
+<summary><strong>Core Platform</strong></summary>
+
 - **Append-Only JSONL Events** -- Tamper-evident event storage with daily rotation and async serialized writes
 - **Hybrid Index Layer** -- In-memory indexes rebuilt from JSONL on boot; O(1) lookups instead of file scans
 - **SSE Real-Time Streaming** -- Server-Sent Events with filters, keepalive, and auto-cleanup
 - **Tailscale Networking** -- Tailnet-first node discovery and peer visibility
-- **Security Hardened** -- PBKDF2, TOTP MFA, HMAC signing, Ed25519, CSP nonces, ReDoS protection, rate limiting
+- **Digital Twin Replay** -- Session comparison and step-by-step replay with scrubber
+- **Topology Graph** -- Interactive SVG cognitive graph of agents, tools, files, and services
+- **Activity Heatmap & Streaks** -- 30-day event visualization with streak tracking
+- **Blast Radius Analysis** -- Per-session and per-node impact assessment
+- **Causality Explorer** -- Trace file/tool references across sessions
+- **Usage Alerts** -- Configurable cost, token, and error rate thresholds with rolling windows
+</details>
+
+<details>
+<summary><strong>Security & Governance</strong></summary>
+
+- **Zero-Trust Sandbox** -- Path canonicalization, symlink resolution, traversal prevention
 - **Typed Safe Actions** -- Command and path allowlists; no remote shell access
 - **Intent Contracts** -- Drift scoring across 5 factors with enforcement ladder
 - **Policy Engine** -- Rule evaluation with ABAC conditions (environment, time windows, risk scores, node tags, roles)
-- **Digital Twin Replay** -- Session comparison and step-by-step replay with scrubber
-- **Topology Graph** -- Interactive SVG cognitive graph of agents, tools, files, and services
-- **Zero-Trust Sandbox** -- Path canonicalization, symlink resolution, traversal prevention
 - **Tripwires / Honeytokens** -- Configurable decoy secrets, paths, and URLs with auto-quarantine
 - **Signed Skills Registry** -- Ed25519 skill signing with canary rollout and auto-rollback
 - **Tamper-Evident Receipt Ledger** -- SHA-256 hash chains with daily Ed25519 root signing
-- **Mobile Ops (Pocket PWA)** -- Live feed, alerts, push notifications, and emergency kill with step-up auth
 - **4-Eyes Approval Workflow** -- Dual-approver mechanism for high-risk actions with self-approve prevention
 - **Evidence Export** -- ZIP bundles with events, audit logs, receipts, and integrity hashes
-- **Activity Heatmap & Streaks** -- 30-day event visualization with streak tracking
-- **Usage Alerts** -- Configurable cost, token, and error rate thresholds with rolling windows
-- **Blast Radius Analysis** -- Per-session and per-node impact assessment
-- **Causality Explorer** -- Trace file/tool references across sessions
+</details>
+
+<details>
+<summary><strong>Operations</strong></summary>
+
+- **Mobile Ops (Pocket PWA)** -- Live feed, alerts, push notifications, and emergency kill with step-up auth
+- **CLI Tool** -- 18 commands for fleet management, policy simulation, evidence export
 - **Graceful Shutdown** -- Connection draining, snapshot flushing, write queue completion, signal handling
+- **Health Probes** -- Unauthenticated `/healthz` for load balancers and Kubernetes
+</details>
 
 ---
 
@@ -1199,7 +1233,7 @@ clawcc/
     sandbox/sandbox.test.js   18 tests: allowlists, traversal, symlinks
     policy/policy.test.js     41 tests: rules, drift, enforcement, ABAC, ReDoS
     receipts/receipts.test.js 12 tests: chains, signing, bundles
-    events/events.test.js     20 tests: ingest, redact, size, subscribe, query
+    events/events.test.js     23 tests: ingest, redact, size, subscribe, query
     intent/intent.test.js     24 tests: contracts, drift, path traversal
     middleware/auth-middleware.test.js  11 tests: auth, MFA-pending, HMAC, nonce replay
     router/router.test.js     21 tests: routing, params, cookies, query
@@ -1214,16 +1248,37 @@ clawcc/
 
 ## Contributing
 
+Contributions are welcome! ClawCC is built for the community and we appreciate every PR, issue, and suggestion.
+
 1. Fork the repository
 2. Create a feature branch: `git checkout -b feature/my-feature`
-3. Make your changes (no external dependencies allowed)
+3. Make your changes (no external dependencies allowed -- stdlib only)
 4. Run tests: `npm test && node test/e2e-smoke.js`
 5. Submit a pull request
 
-All code must use Node.js stdlib only. No `npm install`, no external packages.
+**Ground rules:**
+- Zero external dependencies. All code must use Node.js stdlib only.
+- All new features need tests.
+- Security issues: please report privately via GitHub Security Advisories rather than public issues.
+
+---
+
+## Star History
+
+If ClawCC helps you manage your AI agent fleet, consider giving it a star. It helps others discover the project.
 
 ---
 
 ## License
 
-MIT
+MIT -- use it freely in personal and commercial projects.
+
+---
+
+<div align="center">
+
+**Built with zero dependencies, maximum paranoia.**
+
+[Report a Bug](https://github.com/alokemajumder/clawcc/issues) | [Request a Feature](https://github.com/alokemajumder/clawcc/issues) | [Security Policy](SECURITY_ARCHITECTURE.md)
+
+</div>
