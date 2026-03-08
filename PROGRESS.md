@@ -1,7 +1,7 @@
 # ClawCC Progress Tracker
 
-> Last updated: 2026-03-07
-> Total: 231 tests passing across 11 suites (0 failures)
+> Last updated: 2026-03-08
+> Total: 234 tests passing across 11 suites (0 failures)
 > External dependencies: **0** (Node.js stdlib only)
 > Data layer: Hybrid (JSONL source of truth + in-memory index for O(1) lookups)
 
@@ -53,7 +53,7 @@
 | /tripwires | 1 | DONE | Honeytoken definitions |
 | /skills | 1 | DONE | Registry JSON with canary config |
 | /scripts | 1 | DONE | Demo data generator (30 days, 3 nodes, 210 sessions) |
-| /test | 12 | DONE | 11 suites, 231 tests, all passing |
+| /test | 12 | DONE | 11 suites, 234 tests, all passing |
 
 ---
 
@@ -66,13 +66,13 @@
 | Sandbox | 18 | PASS | test/sandbox/sandbox.test.js |
 | Policy | 41 | PASS | test/policy/policy.test.js |
 | Receipts | 12 | PASS | test/receipts/receipts.test.js |
-| Events | 20 | PASS | test/events/events.test.js |
+| Events | 23 | PASS | test/events/events.test.js |
 | Intent | 24 | PASS | test/intent/intent.test.js |
 | Middleware | 11 | PASS | test/middleware/auth-middleware.test.js |
 | Router | 21 | PASS | test/router/router.test.js |
 | ZIP | 11 | PASS | test/zip/zip.test.js |
 | E2E Smoke | 12 | PASS | test/e2e-smoke.js |
-| **TOTAL** | **231** | **ALL PASS** | |
+| **TOTAL** | **234** | **ALL PASS** | |
 
 ### Test Coverage Details
 

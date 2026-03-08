@@ -1,10 +1,54 @@
+# Dependencies
 node_modules/
+
+# Runtime data directories
 data/
 node-data/
+
+# Logs
 *.log
+npm-debug.log*
+
+# Environment files
 .env
+.env.*
+.env.local
+.env.production
+.env.staging
+
+# TLS/SSL certificates and keys
 *.pem
 *.key
 *.pub
+*.crt
+*.csr
+*.p12
+*.pfx
+
+# Active config files (use examples in config/)
 clawcc.config.json
 node-agent.config.json
+
+# OS files
+.DS_Store
+Thumbs.db
+.Spotlight-V100
+.Trashes
+
+# Editor/IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.settings/
+
+# Coverage
+coverage/
+.nyc_output/
+
+# Temporary files
+tmp/
+temp/
+*.tmp

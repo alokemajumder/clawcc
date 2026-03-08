@@ -22,8 +22,9 @@ function registerEventRoutes(router, config, modules) {
     if (body.severity && typeof body.severity !== 'string') return res.error(400, 'severity must be a string');
     if (body.nodeId && typeof body.nodeId !== 'string') return res.error(400, 'nodeId must be a string');
     try {
-      events.ingest(body);
-      snapshots.update(config.dataDir, body);
+      const stored = events.ingest(body);
+      // Pass the redacted stored event to snapshots, not the raw body
+      snapshots.update(config.dataDir, stored || body);
       res.json(200, { success: true });
     } catch (err) {
       res.error(400, err.message);

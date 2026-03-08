@@ -172,8 +172,8 @@ const events = {
     if (!adapted.nodeId) adapted.nodeId = 'local';
     try {
       const stored = eventStoreInstance.ingest(adapted);
-      // Update in-memory index incrementally
-      index.indexEvent(adapted);
+      // Update in-memory index with redacted event (not the raw adapted one)
+      index.indexEvent(stored);
       return stored;
     }
     catch (err) {

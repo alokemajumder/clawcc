@@ -15,7 +15,7 @@
     "lockoutAttempts": 5,
     "lockoutDurationMs": 900000,
     "stepUpWindowMs": 300000,
-    "pbkdf2Iterations": 600000
+    "pbkdf2Iterations": 100000
   },
   "fleet": {
     "heartbeatTimeoutMs": 60000,

@@ -1048,7 +1048,7 @@ node test/e2e-smoke.js
 node --test test/auth/auth.test.js
 ```
 
-231 tests across 11 suites, all passing:
+234 tests across 11 suites, all passing:
 
 | Suite | Tests | Covers |
 |-------|-------|--------|
@@ -1057,7 +1057,7 @@ node --test test/auth/auth.test.js
 | Sandbox | 18 | Allowlists, path traversal, symlink resolution, argument validation |
 | Policy | 41 | Rule evaluation, drift scoring, enforcement, simulation, ABAC conditions, ReDoS protection |
 | Receipts | 12 | Hash chains, Ed25519 signing, bundle verification |
-| Events | 20 | Ingestion, redaction, size limits, subscriptions, queries, async writes |
+| Events | 23 | Ingestion, redaction, size limits, subscriptions, queries, async writes |
 | Intent | 24 | Intent contracts, drift scoring (5 factors), session ID validation, path traversal prevention |
 | Middleware | 11 | Session authentication, MFA-pending blocking, node signature verification, nonce replay |
 | Router | 21 | Route matching, params, query parsing, cookie parsing, setCookie |

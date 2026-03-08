@@ -64,15 +64,15 @@ describe('Reject event missing required fields', () => {
 });
 
 describe('Secret redaction', () => {
-  it('should redact password in payload', () => {
+  it('should redact password field in object payload', () => {
     const store = createEventStore();
-    const event = makeEvent({ payload: 'password=supersecret123' });
+    const event = makeEvent({ payload: { tool: 'Bash', password: 'supersecret123' } });
     const stored = store.ingest(event);
-    assert.ok(!stored.payload.includes('supersecret123'));
-    assert.ok(stored.payload.includes('REDACTED'));
+    assert.equal(stored.payload.password, '***REDACTED***');
+    assert.equal(stored.payload.tool, 'Bash');
   });
 
-  it('should redact Bearer token in payload', () => {
+  it('should redact Bearer token in string payload', () => {
     const store = createEventStore();
     const event = makeEvent({ payload: 'Authorization: Bearer eyJhbGciOi.token.value' });
     const stored = store.ingest(event);
@@ -80,12 +80,37 @@ describe('Secret redaction', () => {
     assert.ok(stored.payload.includes('REDACTED'));
   });
 
-  it('should redact api_key in payload', () => {
+  it('should redact api_key field in object payload', () => {
     const store = createEventStore();
-    const event = makeEvent({ payload: 'api_key=sk-12345abc' });
+    const event = makeEvent({ payload: { api_key: 'sk-12345abc', model: 'gpt-4' } });
     const stored = store.ingest(event);
-    assert.ok(!stored.payload.includes('sk-12345abc'));
-    assert.ok(stored.payload.includes('REDACTED'));
+    assert.equal(stored.payload.api_key, '***REDACTED***');
+    assert.equal(stored.payload.model, 'gpt-4');
+  });
+
+  it('should redact Bearer token embedded in object string value', () => {
+    const store = createEventStore();
+    const event = makeEvent({ payload: { header: 'Bearer eyJhbGciOi.abc.def', tool: 'curl' } });
+    const stored = store.ingest(event);
+    assert.ok(!stored.payload.header.includes('eyJhbGciOi.abc.def'));
+    assert.ok(stored.payload.header.includes('REDACTED'));
+    assert.equal(stored.payload.tool, 'curl');
+  });
+
+  it('should redact nested secret fields', () => {
+    const store = createEventStore();
+    const event = makeEvent({ payload: { config: { secret: 'mysecret', host: 'localhost' } } });
+    const stored = store.ingest(event);
+    assert.equal(stored.payload.config.secret, '***REDACTED***');
+    assert.equal(stored.payload.config.host, 'localhost');
+  });
+
+  it('should return object payload as object (not string)', () => {
+    const store = createEventStore();
+    const event = makeEvent({ payload: { tool: 'Read', path: '/tmp/test.txt' } });
+    const stored = store.ingest(event);
+    assert.equal(typeof stored.payload, 'object');
+    assert.equal(stored.payload.tool, 'Read');
   });
 });
 

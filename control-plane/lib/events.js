@@ -6,10 +6,12 @@ const crypto = require('node:crypto');
 
 const REQUIRED_FIELDS = ['type', 'severity', 'nodeId', 'timestamp'];
 const VALID_SEVERITIES = ['info', 'warning', 'error', 'critical'];
-const SECRET_PATTERNS = [
-  /(?:password|secret|token|key|api_key|apikey|auth)\s*[:=]\s*["']?([^"'\s]+)/gi,
-  /(?:Bearer\s+)([A-Za-z0-9._-]+)/g
-];
+const SECRET_KEY_NAMES = new Set([
+  'password', 'secret', 'token', 'key', 'apikey', 'api_key',
+  'apikey', 'auth', 'authorization', 'credential', 'private_key',
+  'privatekey', 'access_token', 'refresh_token', 'session_token'
+]);
+const BEARER_PATTERN = /(?:Bearer\s+)([A-Za-z0-9._-]+)/g;
 const MAX_PAYLOAD_SIZE = 65536; // 64KB
 
 function createEventStore(opts = {}) {
@@ -54,14 +56,29 @@ function createEventStore(opts = {}) {
   }
 
   function redactSecrets(payload) {
-    if (typeof payload !== 'string') payload = JSON.stringify(payload);
-    for (const pattern of SECRET_PATTERNS) {
-      pattern.lastIndex = 0;
-      payload = payload.replace(pattern, (match, group) => {
-        return match.replace(group, '***REDACTED***');
-      });
+    if (payload == null) return payload;
+    if (typeof payload === 'string') {
+      // Redact Bearer tokens in string values
+      BEARER_PATTERN.lastIndex = 0;
+      return payload.replace(BEARER_PATTERN, (match, group) => match.replace(group, '***REDACTED***'));
     }
-    return payload;
+    if (typeof payload !== 'object') return payload;
+    // Deep-clone and redact object payloads by key name
+    if (Array.isArray(payload)) return payload.map(item => redactSecrets(item));
+    const redacted = {};
+    for (const [k, v] of Object.entries(payload)) {
+      if (SECRET_KEY_NAMES.has(k.toLowerCase())) {
+        redacted[k] = '***REDACTED***';
+      } else if (typeof v === 'string') {
+        BEARER_PATTERN.lastIndex = 0;
+        redacted[k] = v.replace(BEARER_PATTERN, (match, group) => match.replace(group, '***REDACTED***'));
+      } else if (typeof v === 'object' && v !== null) {
+        redacted[k] = redactSecrets(v);
+      } else {
+        redacted[k] = v;
+      }
+    }
+    return redacted;
   }
 
   function ingest(event) {
