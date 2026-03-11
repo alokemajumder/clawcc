@@ -16,10 +16,25 @@ for (const d of dirs) {
 }
 
 const nodeIds = ['node-dev-alpha', 'node-dev-beta', 'node-staging-gamma'];
-const providers = ['claude', 'gemini'];
+const providers = [
+  'claude', 'codex', 'copilot', 'gemini', 'cursor', 'windsurf', 'amazon-q',
+  'openclaw', 'zeroclaw', 'nemoclaw', 'goose', 'aider', 'cline', 'opencode'
+];
 const models = {
   claude: ['claude-sonnet-4-20250514', 'claude-opus-4-20250514', 'claude-haiku-4-5-20251001'],
-  gemini: ['gemini-2.5-pro', 'gemini-2.5-flash']
+  codex: ['codex-mini', 'o4-mini', 'o3'],
+  copilot: ['gpt-4o', 'gpt-4o-mini', 'copilot-agent-v2'],
+  gemini: ['gemini-2.5-pro', 'gemini-2.5-flash'],
+  cursor: ['cursor-fast', 'cursor-slow'],
+  windsurf: ['windsurf-cascade', 'codeium-autocomplete'],
+  'amazon-q': ['amazon-q-developer', 'amazon-q-transform'],
+  openclaw: ['openclaw-v3', 'nanoclaw-v1', 'kimiclaw-v2', 'maxclaw-v1'],
+  zeroclaw: ['zeroclaw-rust-v1'],
+  nemoclaw: ['nemoclaw-enterprise', 'nemoclaw-lite'],
+  goose: ['goose-default'],
+  aider: ['aider-architect', 'aider-editor'],
+  cline: ['cline-v3'],
+  opencode: ['opencode-default']
 };
 const tools = ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', 'WebSearch', 'Agent'];
 const severities = ['info', 'warning', 'error', 'critical'];

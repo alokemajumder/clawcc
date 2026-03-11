@@ -554,7 +554,7 @@ async function cmdKeygen() {
 
 function showHelp() {
   out(`
-${bold('ClawCC')} - OpenClaw Fleet Control Center CLI v${VERSION}
+${bold('ClawCC')} - AI Agent Fleet Control Center CLI v${VERSION}
 
 ${bold('Usage:')} clawcc <command> [options]
 

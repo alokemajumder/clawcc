@@ -10,7 +10,16 @@ function expandHome(p) {
 
 function discoverSessions(configuredPaths) {
   const sessions = [];
-  const searchPaths = (configuredPaths || ['~/.claude']).map(expandHome);
+  const defaultPaths = [
+    '~/.claude', '~/.codex', '~/.copilot', '~/.cursor',
+    '~/.codeium', '~/.gemini', '~/.augment', '~/.kiro',
+    '~/.aws/amazonq', '~/.config/TabNine',
+    '~/.openclaw', '~/.zeroclaw', '~/.nanobot', '~/.nemoclaw',
+    '~/.continue', '~/.openhands', '~/.tabby',
+    '~/.config/goose', '~/.config/opencode',
+    '~/Documents/Cline'
+  ];
+  const searchPaths = (configuredPaths || defaultPaths).map(expandHome);
 
   for (const basePath of searchPaths) {
     try {
@@ -56,7 +65,16 @@ function redactContent(content) {
 }
 
 function discoverMemory(configuredPaths) {
-  const searchPaths = (configuredPaths || ['~/.claude']).map(expandHome);
+  const defaultPaths = [
+    '~/.claude', '~/.codex', '~/.copilot', '~/.cursor',
+    '~/.codeium', '~/.gemini', '~/.augment', '~/.kiro',
+    '~/.aws/amazonq', '~/.config/TabNine',
+    '~/.openclaw', '~/.zeroclaw', '~/.nanobot', '~/.nemoclaw',
+    '~/.continue', '~/.openhands', '~/.tabby',
+    '~/.config/goose', '~/.config/opencode',
+    '~/Documents/Cline'
+  ];
+  const searchPaths = (configuredPaths || defaultPaths).map(expandHome);
   const result = { memoryMd: null, heartbeatMd: null, dailyNotes: [] };
   const maxDailyNotes = 100;
 

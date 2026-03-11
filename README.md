@@ -45,6 +45,22 @@ AI agents are powerful but opaque. When you run a fleet of them -- across machin
 
 **Portable** -- Runs anywhere Node.js does: bare metal, Docker, Termux on Android, behind Tailscale mesh VPN.
 
+**Agent-Agnostic** -- Works with any AI coding agent. Not tied to a single provider or framework.
+
+---
+
+## Supported Agents
+
+ClawCC discovers and monitors sessions from any AI agent. The following are auto-discovered out of the box:
+
+| Category | Agents |
+|----------|--------|
+| **Big Provider** | Claude Code, Codex CLI, GitHub Copilot, Cursor, Windsurf/Codeium, Gemini Code Assist, Augment Code, Kiro, Amazon Q Developer, Tabnine |
+| **OpenClaw Family** | OpenClaw, ZeroClaw, NanoClaw/Nanobot, NemoClaw |
+| **Open Source** | Continue, OpenHands, Tabby, Goose, OpenCode, Cline, Aider |
+
+Additional agents can be added by configuring `discoveryPaths` (node agent) or `discovery.paths` (control plane). The event schema accepts any `provider` and `model` string -- there is no hardcoded coupling to any vendor.
+
 ---
 
 ## Features
@@ -219,7 +235,7 @@ Default credentials: **admin** / **changeme**
 node scripts/generate-demo-data.js
 ```
 
-Generates 30 days of sample data across 3 nodes and 210 sessions. Restart the server after generating to rebuild indexes.
+Generates 30 days of sample data across 3 nodes, 14 providers (Claude, Codex, Copilot, Gemini, Cursor, Windsurf, Amazon Q, OpenClaw, ZeroClaw, NemoClaw, Goose, Aider, Cline, OpenCode), and ~225 randomized sessions. Restart the server after generating to rebuild indexes.
 
 ### 6. Enroll a Node Agent
 
@@ -327,7 +343,13 @@ Copy from `config/clawcc.config.example.json` and customize:
 
   // --- Workspace Discovery ---
   "discovery": {
-    "paths": ["~/.claude"],           // Paths the ops workspace page can browse
+    "paths": [                        // Paths the ops workspace page can browse (any AI agent)
+      "~/.claude", "~/.codex", "~/.copilot", "~/.cursor",
+      "~/.codeium", "~/.gemini", "~/.augment", "~/.kiro",
+      "~/.aws/amazonq", "~/.openclaw", "~/.zeroclaw",
+      "~/.continue", "~/.openhands", "~/.config/goose",
+      "~/.config/opencode", "~/Documents/Cline"
+    ],
     "intervalMs": 30000               // Discovery refresh interval
   },
 
@@ -358,7 +380,13 @@ Copy from `config/node-agent.config.example.json` and customize:
   "controlPlaneUrl": "http://localhost:3400",  // Control plane URL
   "nodeSecret": "CHANGE_ME_TO_A_STRONG_SECRET", // HMAC shared secret (must match control plane)
   "tags": ["dev"],                    // Tags for policy targeting
-  "discoveryPaths": ["~/.claude"],    // Paths to discover sessions and memory files
+  "discoveryPaths": [                  // Paths to discover sessions and memory files (any AI agent)
+    "~/.claude", "~/.codex", "~/.copilot", "~/.cursor",
+    "~/.codeium", "~/.gemini", "~/.augment", "~/.kiro",
+    "~/.aws/amazonq", "~/.openclaw", "~/.zeroclaw",
+    "~/.continue", "~/.openhands", "~/.config/goose",
+    "~/.config/opencode", "~/Documents/Cline"
+  ],
   "telemetryIntervalMs": 5000,        // Telemetry reporting interval: 5 seconds
   "heartbeatIntervalMs": 15000,       // Heartbeat interval: 15 seconds
   "dataDir": "./node-data",           // Local data directory
@@ -386,13 +414,13 @@ Defines which commands agents can execute. Each entry specifies allowed and disa
 
 **Path Allowlist** (`allowlists/paths.json`):
 
-Controls filesystem access for agents:
+Controls filesystem access for agents. Includes paths for all supported AI agents by default:
 
 ```json
 {
-  "allowed": ["/tmp", "/home/user/workspace"],
-  "protected": ["/etc"],
-  "forbidden": ["/root", "/proc", "/sys"]
+  "allowed": ["~/.claude", "~/.codex", "~/.copilot", "~/.cursor", "~/.openclaw", "..."],
+  "protected": ["~/.claude/credentials.json", "~/.openclaw/openclaw.json", "..."],
+  "forbidden": ["~/.ssh", "~/.gnupg", "~/.aws", "/etc/shadow", "/etc/passwd"]
 }
 ```
 

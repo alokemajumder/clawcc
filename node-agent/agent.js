@@ -39,7 +39,17 @@ const controlPlaneUrl = config.controlPlaneUrl || 'http://localhost:3400';
 const nodeSecret = config.nodeSecret || 'default-secret';
 const heartbeatIntervalMs = config.heartbeatIntervalMs || 15000;
 const telemetryIntervalMs = config.telemetryIntervalMs || 5000;
-const discoveryPaths = config.discoveryPaths || ['~/.claude'];
+const discoveryPaths = config.discoveryPaths || [
+  // Paid / Big Provider agents
+  '~/.claude', '~/.codex', '~/.copilot', '~/.cursor',
+  '~/.codeium', '~/.gemini', '~/.augment', '~/.kiro',
+  '~/.aws/amazonq', '~/.config/TabNine',
+  // Open Source agents
+  '~/.openclaw', '~/.zeroclaw', '~/.nanobot', '~/.nemoclaw',
+  '~/.continue', '~/.openhands', '~/.tabby',
+  '~/.config/goose', '~/.config/opencode',
+  '~/Documents/Cline'
+];
 const dataDir = (config.dataDir || './node-data').replace(/^~/, os.homedir());
 const spoolDir = (config.spoolDir || path.join(dataDir, 'spool')).replace(/^~/, os.homedir());
 const allowlistsDir = (config.allowlistsDir || '../allowlists').replace(/^~/, os.homedir());

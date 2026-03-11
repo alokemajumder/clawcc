@@ -68,12 +68,23 @@ function registerOpsRoutes(router, config, modules) {
     if (!authResult.authenticated) return res.error(401, 'Not authenticated');
     const home = os.homedir();
     const memoryFiles = {};
-    const searchPaths = [
-      path.join(home, '.claude', 'MEMORY.md'),
-      path.join(home, '.claude', 'HEARTBEAT.md')
+    const discoveryPaths = config.discovery ? config.discovery.paths || [] : [
+      '~/.claude', '~/.codex', '~/.copilot', '~/.cursor',
+      '~/.codeium', '~/.gemini', '~/.augment', '~/.kiro',
+      '~/.aws/amazonq', '~/.config/TabNine',
+      '~/.openclaw', '~/.zeroclaw', '~/.nanobot', '~/.nemoclaw',
+      '~/.continue', '~/.openhands', '~/.tabby',
+      '~/.config/goose', '~/.config/opencode',
+      '~/Documents/Cline'
     ];
-    for (const p of searchPaths) {
-      try { memoryFiles[path.basename(p)] = fs.readFileSync(p, 'utf8'); } catch { memoryFiles[path.basename(p)] = null; }
+    const memoryFileNames = ['MEMORY.md', 'HEARTBEAT.md'];
+    for (const dp of discoveryPaths) {
+      const resolved = dp.replace(/^~/, home);
+      for (const fn of memoryFileNames) {
+        const p = path.join(resolved, fn);
+        const key = `${path.basename(resolved)}/${fn}`;
+        try { memoryFiles[key] = fs.readFileSync(p, 'utf8'); } catch { /* skip */ }
+      }
     }
     res.json(200, { success: true, files: memoryFiles });
   });
@@ -81,7 +92,15 @@ function registerOpsRoutes(router, config, modules) {
   router.get('/api/ops/workspace/files', async (req, res) => {
     const authResult = authenticate(req, auth);
     if (!authResult.authenticated) return res.error(401, 'Not authenticated');
-    const allowedPaths = config.discovery ? config.discovery.paths || [] : ['~/.claude'];
+    const allowedPaths = config.discovery ? config.discovery.paths || [] : [
+      '~/.claude', '~/.codex', '~/.copilot', '~/.cursor',
+      '~/.codeium', '~/.gemini', '~/.augment', '~/.kiro',
+      '~/.aws/amazonq', '~/.config/TabNine',
+      '~/.openclaw', '~/.zeroclaw', '~/.nanobot', '~/.nemoclaw',
+      '~/.continue', '~/.openhands', '~/.tabby',
+      '~/.config/goose', '~/.config/opencode',
+      '~/Documents/Cline'
+    ];
     const home = os.homedir();
     const files = [];
     for (const p of allowedPaths) {
@@ -101,7 +120,15 @@ function registerOpsRoutes(router, config, modules) {
     if (!authResult.authenticated) return res.error(401, 'Not authenticated');
     const filePath = req.query.path;
     if (!filePath) return res.error(400, 'Path required');
-    const allowedPaths = config.discovery ? config.discovery.paths || [] : ['~/.claude'];
+    const allowedPaths = config.discovery ? config.discovery.paths || [] : [
+      '~/.claude', '~/.codex', '~/.copilot', '~/.cursor',
+      '~/.codeium', '~/.gemini', '~/.augment', '~/.kiro',
+      '~/.aws/amazonq', '~/.config/TabNine',
+      '~/.openclaw', '~/.zeroclaw', '~/.nanobot', '~/.nemoclaw',
+      '~/.continue', '~/.openhands', '~/.tabby',
+      '~/.config/goose', '~/.config/opencode',
+      '~/Documents/Cline'
+    ];
     const result = sanitizePath(filePath, allowedPaths);
     if (!result.safe) return res.error(403, 'Path not in allowed roots');
     try {
@@ -119,7 +146,15 @@ function registerOpsRoutes(router, config, modules) {
     let body;
     try { body = await parseBody(req); } catch (err) { return res.error(400, err.message); }
     if (!body.path || body.content === undefined) return res.error(400, 'Path and content required');
-    const allowedPaths = config.discovery ? config.discovery.paths || [] : ['~/.claude'];
+    const allowedPaths = config.discovery ? config.discovery.paths || [] : [
+      '~/.claude', '~/.codex', '~/.copilot', '~/.cursor',
+      '~/.codeium', '~/.gemini', '~/.augment', '~/.kiro',
+      '~/.aws/amazonq', '~/.config/TabNine',
+      '~/.openclaw', '~/.zeroclaw', '~/.nanobot', '~/.nemoclaw',
+      '~/.continue', '~/.openhands', '~/.tabby',
+      '~/.config/goose', '~/.config/opencode',
+      '~/Documents/Cline'
+    ];
     const result = sanitizePath(body.path, allowedPaths);
     if (!result.safe) return res.error(403, 'Path not in allowed roots');
     const crypto = require('crypto');
@@ -190,7 +225,8 @@ function registerOpsRoutes(router, config, modules) {
     if (!authResult.authenticated) return res.error(401, 'Not authenticated');
     const source = req.query.source || 'clawcc';
     const lines = parseInt(req.query.lines || '100', 10);
-    const logPaths = { clawcc: '/var/log/clawcc/clawcc.log', openclaw: '/var/log/openclaw/openclaw.log' };
+    const defaultLogPaths = { clawcc: '/var/log/clawcc/clawcc.log' };
+    const logPaths = config.logSources || defaultLogPaths;
     const logPath = logPaths[source];
     if (!logPath) return res.json(200, { success: true, logs: [] });
     try {

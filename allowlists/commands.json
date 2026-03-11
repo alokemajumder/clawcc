@@ -1,13 +1,13 @@
 {
   "_comment": "Allowed commands for safe action execution",
   "commands": {
-    "restart-openclaw": {
+    "restart-agent": {
       "command": "systemctl",
-      "allowedArgs": ["restart", "openclaw"],
+      "allowedArgs": ["restart"],
       "timeout": 30000,
       "requiresApproval": true,
       "riskLevel": "high",
-      "description": "Restart the OpenClaw service"
+      "description": "Restart a managed agent service"
     },
     "restart-clawcc-agent": {
       "command": "systemctl",
