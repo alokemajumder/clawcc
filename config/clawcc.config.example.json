@@ -66,5 +66,10 @@
     "tokensPerHour": 100000,
     "errorRateThreshold": 0.10,
     "enabled": true
+  },
+  "sqlite": {
+    "enabled": true,
+    "path": "./data/index.sqlite",
+    "walMode": true
   }
 }

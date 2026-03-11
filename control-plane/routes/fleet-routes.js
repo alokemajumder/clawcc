@@ -130,7 +130,7 @@ function registerFleetRoutes(router, config, modules) {
   router.delete('/api/fleet/nodes/:nodeId', async (req, res) => {
     const authResult = authenticate(req, auth);
     if (!authResult.authenticated) return res.error(401, 'Not authenticated');
-    if (authResult.user.role !== 'admin') return res.error(403, 'Admin required');
+    if ((authResult.user.role || '').toLowerCase() !== 'admin') return res.error(403, 'Admin required');
     const nodes = loadFleetNodes();
     delete nodes[req.params.nodeId];
     saveFleetNodes(nodes);

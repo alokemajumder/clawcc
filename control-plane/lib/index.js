@@ -12,8 +12,14 @@ const path = require('path');
  *
  * Rebuilt from JSONL on boot, updated incrementally on every ingest.
  * Ephemeral - never persisted. Always rebuildable from JSONL.
+ *
+ * When an optional sqliteStore is provided, queries are delegated to SQLite
+ * for faster compound filtering and aggregation. The in-memory indexes remain
+ * as a hot cache and fallback.
  */
-function createIndex() {
+function createIndex(opts) {
+  opts = opts || {};
+  const sqliteStore = opts.sqliteStore || null;
   // --- Primary event storage (all events in memory) ---
   const allEvents = [];
 
@@ -103,6 +109,11 @@ function createIndex() {
       });
       if (hourlyUsage.length > HOURLY_USAGE_MAX) hourlyUsage.shift();
     }
+
+    // Mirror to SQLite if available
+    if (sqliteStore) {
+      try { sqliteStore.indexEvent(event); } catch { /* ignore */ }
+    }
   }
 
   /**
@@ -119,6 +130,17 @@ function createIndex() {
     hourlyUsage.length = 0;
     snapshotDataDir = dataDir;
 
+    // If SQLite is available, catch up from JSONL into SQLite first
+    if (sqliteStore) {
+      const catchUpCount = sqliteStore.catchUpFromJSONL(dataDir);
+      if (catchUpCount > 0) {
+        console.log(`  SQLite: caught up ${catchUpCount} new events from JSONL`);
+      }
+      const totalSqlite = sqliteStore.eventCount();
+      console.log(`  SQLite: ${totalSqlite} events indexed`);
+    }
+
+    // Still rebuild in-memory index (hot cache for SSE subscribers and real-time queries)
     try {
       const files = fs.readdirSync(eventsDir).filter(f => f.endsWith('.jsonl')).sort();
       for (const file of files) {
@@ -126,7 +148,37 @@ function createIndex() {
         if (!content) continue;
         for (const line of content.split('\n')) {
           try {
-            indexEvent(JSON.parse(line));
+            // During rebuild, skip SQLite mirror (already caught up above)
+            const event = JSON.parse(line);
+            const idx = allEvents.length;
+            allEvents.push(event);
+            if (event.sessionId) { if (!bySessionId.has(event.sessionId)) bySessionId.set(event.sessionId, []); bySessionId.get(event.sessionId).push(idx); }
+            if (event.nodeId) { if (!byNodeId.has(event.nodeId)) byNodeId.set(event.nodeId, []); byNodeId.get(event.nodeId).push(idx); }
+            if (event.type) { if (!byType.has(event.type)) byType.set(event.type, []); byType.get(event.type).push(idx); }
+            const d = (event.ts || event.timestamp || '').slice(0, 10);
+            if (d) {
+              if (!byDate.has(d)) byDate.set(d, []); byDate.get(d).push(idx);
+              dailyCounts.set(d, (dailyCounts.get(d) || 0) + 1);
+            }
+            if (event.type === 'provider.usage' && event.payload) {
+              const p = event.payload;
+              hourlyUsage.push({ ts: event.ts || event.timestamp, cost: p.cost || 0, inputTokens: p.inputTokens || 0, outputTokens: p.outputTokens || 0, provider: p.provider || 'unknown', model: p.model || 'unknown' });
+              if (hourlyUsage.length > HOURLY_USAGE_MAX) hourlyUsage.shift();
+            }
+            // Evict if needed
+            if (allEvents.length >= ALL_EVENTS_MAX) {
+              const evictCount = Math.floor(ALL_EVENTS_MAX * 0.1);
+              allEvents.splice(0, evictCount);
+              bySessionId.clear(); byNodeId.clear(); byType.clear(); byDate.clear();
+              for (let i = 0; i < allEvents.length; i++) {
+                const e = allEvents[i];
+                if (e.sessionId) { if (!bySessionId.has(e.sessionId)) bySessionId.set(e.sessionId, []); bySessionId.get(e.sessionId).push(i); }
+                if (e.nodeId) { if (!byNodeId.has(e.nodeId)) byNodeId.set(e.nodeId, []); byNodeId.get(e.nodeId).push(i); }
+                if (e.type) { if (!byType.has(e.type)) byType.set(e.type, []); byType.get(e.type).push(i); }
+                const dd = (e.ts || e.timestamp || '').slice(0, 10);
+                if (dd) { if (!byDate.has(dd)) byDate.set(dd, []); byDate.get(dd).push(i); }
+              }
+            }
           } catch { /* skip bad lines */ }
         }
       }
@@ -143,6 +195,12 @@ function createIndex() {
     filters = filters || {};
     const limit = filters.limit || 100;
     const offset = filters.offset || 0;
+
+    // Try SQLite first for compound queries
+    if (sqliteStore) {
+      const result = sqliteStore.queryEvents(filters);
+      if (result) return result;
+    }
 
     // Find the most selective index to start from
     let candidateIndices = null;
@@ -219,6 +277,13 @@ function createIndex() {
    */
   function getHeatmap(days) {
     days = days || 30;
+
+    // Try SQLite first
+    if (sqliteStore) {
+      const result = sqliteStore.getHeatmap(days);
+      if (result) return result;
+    }
+
     const heatmap = {};
     const now = new Date();
     let max = 0;
@@ -237,6 +302,12 @@ function createIndex() {
    * Rolling usage aggregation from the in-memory ring buffer (O(n) on buffer, not on disk)
    */
   function getRollingUsage(windowMs) {
+    // Try SQLite first
+    if (sqliteStore) {
+      const result = sqliteStore.getRollingUsage(windowMs);
+      if (result) return result;
+    }
+
     const cutoff = new Date(Date.now() - windowMs).toISOString();
     const providers = {};
     let totalRequests = 0, totalTokens = 0, totalCost = 0;

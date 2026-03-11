@@ -147,8 +147,8 @@ function createReceiptStore(opts = {}) {
     // Verify internal chain
     for (let i = 0; i < bundle.receipts.length; i++) {
       const r = bundle.receipts[i];
-      const expectedPrev = i === 0 ? r.prevHash : bundle.receipts[i - 1].hash;
-      if (i > 0 && r.prevHash !== expectedPrev) return { valid: false, reason: `Chain broken at ${i}` };
+      const expectedPrev = i === 0 ? (r.index === 0 ? '0'.repeat(64) : r.prevHash) : bundle.receipts[i - 1].hash;
+      if (r.prevHash !== expectedPrev) return { valid: false, reason: `Chain broken at ${i}` };
       const expectedEntryHash = hashData(r.prevHash + hashData(r.data));
       if (r.hash !== expectedEntryHash) return { valid: false, reason: `Hash mismatch at ${i}` };
     }

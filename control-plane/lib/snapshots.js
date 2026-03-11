@@ -71,12 +71,13 @@ function rebuild(dataDir) {
 
 function processEvent(event, sessions, usage, health, nodeSet, toolSet, edgeMap) {
   if (event.nodeId) nodeSet.add(event.nodeId);
+  const eventTs = event.ts || event.timestamp;
 
   switch (event.type) {
     case 'session.started':
       sessions[event.sessionId] = {
-        nodeId: event.nodeId, status: 'active', startedAt: event.ts,
-        lastActivity: event.ts, provider: event.payload?.provider || '',
+        nodeId: event.nodeId, status: 'active', startedAt: eventTs,
+        lastActivity: eventTs, provider: event.payload?.provider || '',
         model: event.payload?.model || '', toolCalls: 0, errors: 0,
         tokens: 0, cost: 0, driftScore: 0
       };
@@ -85,21 +86,21 @@ function processEvent(event, sessions, usage, health, nodeSet, toolSet, edgeMap)
     case 'session.ended':
       if (sessions[event.sessionId]) {
         sessions[event.sessionId].status = 'ended';
-        sessions[event.sessionId].lastActivity = event.ts;
+        sessions[event.sessionId].lastActivity = eventTs;
       }
       break;
 
     case 'session.error':
       if (sessions[event.sessionId]) {
         sessions[event.sessionId].errors++;
-        sessions[event.sessionId].lastActivity = event.ts;
+        sessions[event.sessionId].lastActivity = eventTs;
       }
       break;
 
     case 'tool.call':
       if (sessions[event.sessionId]) {
         sessions[event.sessionId].toolCalls++;
-        sessions[event.sessionId].lastActivity = event.ts;
+        sessions[event.sessionId].lastActivity = eventTs;
       }
       if (event.payload?.tool) {
         toolSet.add(event.payload.tool);
@@ -115,7 +116,7 @@ function processEvent(event, sessions, usage, health, nodeSet, toolSet, edgeMap)
     case 'tool.error':
       if (sessions[event.sessionId]) {
         sessions[event.sessionId].errors++;
-        sessions[event.sessionId].lastActivity = event.ts;
+        sessions[event.sessionId].lastActivity = eventTs;
       }
       break;
 
@@ -127,14 +128,14 @@ function processEvent(event, sessions, usage, health, nodeSet, toolSet, edgeMap)
         }
         const prov = usage.providers[p.provider];
         if (!prov.models[p.model]) {
-          prov.models[p.model] = { requests: 0, inputTokens: 0, outputTokens: 0, cost: 0, lastUsed: event.ts };
+          prov.models[p.model] = { requests: 0, inputTokens: 0, outputTokens: 0, cost: 0, lastUsed: eventTs };
         }
         const m = prov.models[p.model];
         m.requests++;
         m.inputTokens += p.inputTokens || 0;
         m.outputTokens += p.outputTokens || 0;
         m.cost += p.cost || 0;
-        m.lastUsed = event.ts;
+        m.lastUsed = eventTs;
         prov.totalCost += p.cost || 0;
         usage.lifetime.totalCost += p.cost || 0;
         usage.lifetime.totalTokens += (p.inputTokens || 0) + (p.outputTokens || 0);
@@ -150,7 +151,7 @@ function processEvent(event, sessions, usage, health, nodeSet, toolSet, edgeMap)
       if (event.nodeId && event.payload) {
         health.nodes[event.nodeId] = {
           status: 'online',
-          lastHeartbeat: event.ts,
+          lastHeartbeat: eventTs,
           cpu: event.payload.cpu ?? event.payload.health?.cpu?.usage,
           ram: event.payload.ram ?? event.payload.health?.ram?.percent,
           disk: event.payload.disk ?? event.payload.health?.disk?.percent,

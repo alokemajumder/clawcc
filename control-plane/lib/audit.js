@@ -7,6 +7,11 @@ const crypto = require('crypto');
 let lastHash = '0'.repeat(64);
 let seq = 0;
 const ensuredDirs = new Set();
+let _sqliteStore = null;
+
+function setSqliteStore(store) {
+  _sqliteStore = store;
+}
 
 function init(dataDir) {
   const auditDir = path.join(dataDir, 'audit');
@@ -59,6 +64,11 @@ function log(entry) {
     if (err) console.error('Audit write error:', err.message);
   });
 
+  // Mirror to SQLite if available
+  if (_sqliteStore) {
+    try { _sqliteStore.indexAuditEntry(record); } catch { /* ignore */ }
+  }
+
   return record;
 }
 
@@ -85,9 +95,17 @@ function rotate(dataDir, retentionDays) {
 
 function query(dataDir, filters) {
   filters = filters || {};
+  const limit = Math.min(filters.limit || 100, 10000);
+
+  // Try SQLite first for faster queries
+  if (_sqliteStore) {
+    const result = _sqliteStore.queryAudit({ ...filters, limit });
+    if (result) return result;
+  }
+
+  // Fallback: scan JSONL files
   const auditDir = path.join(dataDir, 'audit');
   const entries = [];
-  const limit = Math.min(filters.limit || 100, 10000);
 
   try {
     const files = fs.readdirSync(auditDir).filter(f => f.endsWith('.jsonl')).sort().reverse();
@@ -124,4 +142,4 @@ function exportAudit(dataDir, from, to) {
   return { entries, integrity: { firstHash, lastHash: lastHashVal, count: entries.length } };
 }
 
-module.exports = { init, log, rotate, query, export: exportAudit };
+module.exports = { init, log, rotate, query, export: exportAudit, setSqliteStore };

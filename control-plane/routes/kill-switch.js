@@ -22,7 +22,7 @@ function registerKillSwitchRoutes(router, config, modules) {
   router.post('/api/kill/session/:sessionId', async (req, res) => {
     const authResult = authenticate(req, auth);
     if (!authResult.authenticated) return res.error(401, 'Not authenticated');
-    if (authResult.user.role !== 'admin') return res.error(403, 'Admin required');
+    if ((authResult.user.role || '').toLowerCase() !== 'admin') return res.error(403, 'Admin required');
     const stepUp = requireStepUp(req, auth, config);
     if (!stepUp.authorized) return res.error(403, stepUp.reason);
     await performKill('session', req.params.sessionId, authResult.user, res);
@@ -31,7 +31,7 @@ function registerKillSwitchRoutes(router, config, modules) {
   router.post('/api/kill/node/:nodeId', async (req, res) => {
     const authResult = authenticate(req, auth);
     if (!authResult.authenticated) return res.error(401, 'Not authenticated');
-    if (authResult.user.role !== 'admin') return res.error(403, 'Admin required');
+    if ((authResult.user.role || '').toLowerCase() !== 'admin') return res.error(403, 'Admin required');
     const stepUp = requireStepUp(req, auth, config);
     if (!stepUp.authorized) return res.error(403, stepUp.reason);
     await performKill('node', req.params.nodeId, authResult.user, res);
@@ -40,7 +40,7 @@ function registerKillSwitchRoutes(router, config, modules) {
   router.post('/api/kill/global', async (req, res) => {
     const authResult = authenticate(req, auth);
     if (!authResult.authenticated) return res.error(401, 'Not authenticated');
-    if (authResult.user.role !== 'admin') return res.error(403, 'Admin required');
+    if ((authResult.user.role || '').toLowerCase() !== 'admin') return res.error(403, 'Admin required');
     const stepUp = requireStepUp(req, auth, config);
     if (!stepUp.authorized) return res.error(403, stepUp.reason);
     await performKill('global', 'all', authResult.user, res);

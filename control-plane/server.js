@@ -65,6 +65,7 @@ const { createPolicyEngine } = require('./lib/policy');
 const intentMod = require('./lib/intent');
 const { createRouter } = require('./lib/router');
 const { createIndex } = require('./lib/index');
+const { createSqliteStore } = require('./lib/sqlite-store');
 const { securityHeaders, rateLimiter } = require('./middleware/security');
 
 // Initialize modules
@@ -159,8 +160,29 @@ const auth = {
 // Event store
 const eventStoreInstance = createEventStore({ dataDir: path.join(config.dataDir, 'events') });
 
+// SQLite acceleration layer (optional — graceful fallback if unavailable)
+const sqliteConfig = config.sqlite || {};
+const sqliteEnabled = sqliteConfig.enabled !== false;
+let sqliteStore = null;
+if (sqliteEnabled) {
+  const sqlitePath = sqliteConfig.path
+    ? path.resolve(sqliteConfig.path)
+    : path.join(config.dataDir, 'index.sqlite');
+  sqliteStore = createSqliteStore({
+    path: sqlitePath,
+    walMode: sqliteConfig.walMode !== false
+  });
+  if (sqliteStore) {
+    console.log('SQLite acceleration: enabled (' + sqlitePath + ')');
+    auditMod.setSqliteStore(sqliteStore);
+  } else {
+    console.log('SQLite acceleration: unavailable (node:sqlite not found, using in-memory only)');
+  }
+}
+
 // Hybrid Index Layer: in-memory indexes over JSONL, rebuilt on boot
-const index = createIndex();
+// When SQLite is available, queries are delegated there for faster compound filtering
+const index = createIndex({ sqliteStore });
 
 // Events adapter: routes call events.ingest(event), events.subscribe(filter, cb), events.query(dataDir, filters)
 const events = {
@@ -492,6 +514,16 @@ try {
   console.log('Index rebuild skipped:', err.message);
 }
 
+// Catch up audit logs into SQLite
+if (sqliteStore) {
+  try {
+    const auditCount = sqliteStore.catchUpAuditFromJSONL(config.dataDir);
+    if (auditCount > 0) console.log('SQLite: caught up ' + auditCount + ' audit entries');
+  } catch (err) {
+    console.log('SQLite audit catch-up skipped:', err.message);
+  }
+}
+
 console.log('Rebuilding snapshots...');
 try {
   snapshotsMod.rebuild(config.dataDir);
@@ -552,6 +584,10 @@ function shutdown(signal) {
     if (stats.queued > 0) console.log('Flushing ' + stats.queued + ' pending event writes...');
     if (stats.dropped > 0) console.warn('Warning: ' + stats.dropped + ' writes were dropped due to backpressure during this session');
   } catch { /* ignore */ }
+  // Close SQLite
+  if (sqliteStore) {
+    try { sqliteStore.close(); console.log('SQLite closed.'); } catch { /* ignore */ }
+  }
   // Clear snapshot rebuild interval
   clearInterval(snapshotRebuildInterval);
   // Stop accepting new connections

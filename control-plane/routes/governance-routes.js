@@ -37,7 +37,7 @@ function registerGovernanceRoutes(router, config, modules) {
   router.put('/api/governance/policies/:id', async (req, res) => {
     const authResult = authenticate(req, auth);
     if (!authResult.authenticated) return res.error(401, 'Not authenticated');
-    if (authResult.user.role !== 'admin') return res.error(403, 'Admin required');
+    if ((authResult.user.role || '').toLowerCase() !== 'admin') return res.error(403, 'Admin required');
     const stepUp = requireStepUp(req, auth, config);
     if (!stepUp.authorized) return res.error(403, stepUp.reason);
     // Validate policy ID to prevent path traversal
@@ -172,7 +172,7 @@ function registerGovernanceRoutes(router, config, modules) {
   router.put('/api/governance/tripwires', async (req, res) => {
     const authResult = authenticate(req, auth);
     if (!authResult.authenticated) return res.error(401, 'Not authenticated');
-    if (authResult.user.role !== 'admin') return res.error(403, 'Admin required');
+    if ((authResult.user.role || '').toLowerCase() !== 'admin') return res.error(403, 'Admin required');
     const stepUp = requireStepUp(req, auth, config);
     if (!stepUp.authorized) return res.error(403, stepUp.reason);
     let body;
@@ -289,7 +289,7 @@ function registerGovernanceRoutes(router, config, modules) {
   router.post('/api/governance/skills/:id/deploy', async (req, res) => {
     const authResult = authenticate(req, auth);
     if (!authResult.authenticated) return res.error(401, 'Not authenticated');
-    if (authResult.user.role !== 'admin') return res.error(403, 'Admin required');
+    if ((authResult.user.role || '').toLowerCase() !== 'admin') return res.error(403, 'Admin required');
     const stepUp = requireStepUp(req, auth, config);
     if (!stepUp.authorized) return res.error(403, stepUp.reason);
     let body;
@@ -340,7 +340,7 @@ function registerGovernanceRoutes(router, config, modules) {
   router.post('/api/governance/skills/:id/rollback', async (req, res) => {
     const authResult = authenticate(req, auth);
     if (!authResult.authenticated) return res.error(401, 'Not authenticated');
-    if (authResult.user.role !== 'admin') return res.error(403, 'Admin required');
+    if ((authResult.user.role || '').toLowerCase() !== 'admin') return res.error(403, 'Admin required');
     audit.log({ actor: authResult.user.username, action: 'skill.rolledback', target: req.params.id });
     events.ingest({ ts: new Date().toISOString(), nodeId: null, sessionId: null, type: 'skill.rolledback', severity: 'warning', payload: { skillId: req.params.id } });
     res.json(200, { success: true });
