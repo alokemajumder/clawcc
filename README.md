@@ -33,13 +33,13 @@ It doesn't just show you what agents did — it **stops them**, **enforces polic
 
 ### Manage Any Agent, Any Fleet Size
 
-FCC discovers and manages sessions from **any AI coding agent** — not just one vendor.
+FCC manages sessions from **any AI coding agent** — not just one vendor. The node agent scans configurable discovery paths for session data.
 
 | | Agents |
 |-|--------|
-| **Major** | Claude Code, Codex CLI, GitHub Copilot, Cursor, Windsurf, Gemini Code Assist, Augment, Kiro, Amazon Q, Tabnine |
-| **Open Source** | Continue, OpenHands, Tabby, Goose, OpenCode, Cline, Aider |
-| **Custom** | Any agent via `discoveryPaths` — no vendor lock-in |
+| **Major** | Claude Code, Codex CLI, GitHub Copilot, Cursor, Codeium/Windsurf, Gemini Code Assist, Augment, Kiro, Amazon Q, Tabnine |
+| **Open Source** | Continue, OpenHands, Tabby, Goose, OpenCode, Cline |
+| **Custom** | Any agent via `discoveryPaths` config — no vendor lock-in |
 
 Each agent gets: heartbeat monitoring, stale detection, SOUL files (markdown personality definitions), event timeline, drift scoring, and fleet-wide scorecards.
 
@@ -86,7 +86,7 @@ FCC doesn't just log — it produces **machine-verifiable, tamper-evident eviden
 
 | Feature | What It Does |
 |---------|-------------|
-| **Channels** | Broadcast, direct, and group messaging between agents with SSE |
+| **Channels** | Broadcast and group messaging between agents with SSE |
 | **Kanban Tasks** | Assign work to agents with enforced status transitions |
 | **Skills Hub** | Browse, install, security-scan, and quarantine agent skills |
 | **SOUL Files** | Define agent personality and behavior in markdown |
@@ -137,7 +137,7 @@ cp config/node-agent.config.example.json node-agent.config.json
 node node-agent/agent.js
 ```
 
-The agent daemon discovers sessions, signs requests with HMAC, spools events offline, and auto-reconnects.
+The agent daemon scans configured discovery paths for session JSONL files, signs requests with HMAC, spools events offline, and auto-reconnects.
 
 ---
 
