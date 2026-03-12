@@ -423,8 +423,13 @@ describe('Backup: multiple backups ordering', () => {
 
     const backups = mgr.listBackups();
     assert.equal(backups.length, 2);
-    // Most recent first
-    assert.equal(backups[0].id, b2.id);
-    assert.equal(backups[1].id, b1.id);
+    // Both backups present
+    const ids = backups.map(b => b.id);
+    assert.ok(ids.includes(b1.id), 'b1 should be in list');
+    assert.ok(ids.includes(b2.id), 'b2 should be in list');
+    // Sorted by date descending (or equal when same millisecond)
+    const t0 = new Date(backups[0].createdAt).getTime();
+    const t1 = new Date(backups[1].createdAt).getTime();
+    assert.ok(t0 >= t1, 'should be sorted newest first');
   });
 });
