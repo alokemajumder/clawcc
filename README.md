@@ -2,7 +2,7 @@
 
 # Fleet Control Center
 
-### Self-Hosted Control Plane for AI Agent Fleets
+### The control plane your AI agents are missing
 
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D18.0-339933?style=flat-square&logo=node.js&logoColor=white)](https://nodejs.org)
 [![Dependencies](https://img.shields.io/badge/dependencies-0-brightgreen?style=flat-square)](package.json)
@@ -10,26 +10,101 @@
 [![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square)](CONTRIBUTING.md)
 
-**Monitor, govern, replay, and secure your AI agent fleet from a single dashboard.**
-**Zero npm dependencies. Pure Node.js. Air-gappable. Deploy anywhere.**
+**Kill rogue agents. Enforce drift policies. Quarantine threats. Export compliance evidence.**
+**Not a dashboard — a control plane that acts.**
 
-[Quick Start](#quick-start) | [Features](#features) | [Architecture](#architecture) | [Security](#security) | [API Docs](PROGRESS.md) | [Contributing](CONTRIBUTING.md)
+[Quick Start](#quick-start) | [What It Does](#what-it-does) | [Security](#security-enforcement) | [Architecture](#architecture) | [Contributing](CONTRIBUTING.md)
 
 </div>
 
 ---
 
-## Why FCC?
+## The Problem
 
-You're running AI agents — Claude Code, Copilot, Cursor, Codex, or your own. They touch files, call APIs, generate code. But **what are they actually doing?**
+You have 5 developers running Claude Code, Copilot, Cursor, and Codex across 12 machines. Last Tuesday, one agent modified production config files it shouldn't have touched. You found out two days later.
 
-| You ask... | FCC answers |
-|-----------|-------------|
-| "What did my agents do last night?" | Append-only event ledger with session replay and timeline |
-| "Are my agents drifting off-task?" | Intent contracts with 5-factor drift scoring |
-| "How do I kill a rogue agent NOW?" | Emergency kill switch with step-up MFA |
-| "Can I prove compliance to auditors?" | Hash-chained audit trails, Ed25519 receipts, evidence export |
-| "Do I need 500 npm packages for this?" | **Zero.** Pure Node.js stdlib. No `node_modules`. |
+**FCC exists so that never happens again.**
+
+It doesn't just show you what agents did — it **stops them**, **enforces policy**, **quarantines violations**, and **produces signed evidence** for your compliance team.
+
+---
+
+## What It Does
+
+### Manage Any Agent, Any Fleet Size
+
+FCC discovers and manages sessions from **any AI coding agent** — not just one vendor.
+
+| | Agents |
+|-|--------|
+| **Major** | Claude Code, Codex CLI, GitHub Copilot, Cursor, Windsurf, Gemini Code Assist, Augment, Kiro, Amazon Q, Tabnine |
+| **Open Source** | Continue, OpenHands, Tabby, Goose, OpenCode, Cline, Aider |
+| **Custom** | Any agent via `discoveryPaths` — no vendor lock-in |
+
+Each agent gets: heartbeat monitoring, stale detection, SOUL files (markdown personality definitions), event timeline, drift scoring, and fleet-wide scorecards.
+
+### Enforce Policy — Not Just Observe
+
+Most agent tools are dashboards. FCC is a **policy enforcement engine** with teeth:
+
+| Trigger | FCC Action |
+|---------|------------|
+| Agent touches files outside allowed paths | **Blocked** by zero-trust sandbox |
+| Drift score exceeds threshold | **Escalation ladder**: warn → require approval → throttle → quarantine → kill |
+| Honeytoken file accessed | **Auto-quarantine** + evidence bundle generated |
+| Agent tries disallowed command | **Rejected** — typed safe actions only, no remote shell |
+| High-risk operation requested | **4-eyes approval** required, step-up MFA enforced |
+| Security profile violated | **Blocked or alerted** per minimal/standard/strict profile |
+
+### Kill Switch — Session, Node, or Global
+
+```bash
+# Kill a single session
+node cli/clawcc.js kill session <sessionId>
+
+# Kill all agents on a node
+node cli/clawcc.js kill node <nodeId>
+
+# Kill everything, everywhere, now
+node cli/clawcc.js kill global
+```
+
+Every kill generates a signed evidence bundle. Requires admin + step-up MFA. Cannot be triggered by accident.
+
+### Compliance That Auditors Accept
+
+FCC doesn't just log — it produces **machine-verifiable, tamper-evident evidence**:
+
+- **Append-only JSONL** — Events cannot be retroactively modified
+- **SHA-256 hash chains** — Each event references the previous hash; tampering breaks the chain
+- **Ed25519 signed receipts** — Daily root signatures prove chain integrity
+- **Evidence export** — ZIP bundles with events, audit logs, receipts, and integrity hashes
+- **Secret redaction** — Automatic removal of passwords, tokens, and keys from event payloads
+- **Control mappings** — SOC 2, ISO 27001, NIST CSF ([COMPLIANCE_PACK.md](COMPLIANCE_PACK.md))
+
+### Multi-Agent Coordination
+
+| Feature | What It Does |
+|---------|-------------|
+| **Channels** | Broadcast, direct, and group messaging between agents with SSE |
+| **Kanban Tasks** | Assign work to agents with enforced status transitions |
+| **Skills Hub** | Browse, install, security-scan, and quarantine agent skills |
+| **SOUL Files** | Define agent personality and behavior in markdown |
+| **Evaluations** | 4-layer scoring (output, trace, component, drift) with quality gates |
+| **Scheduler** | Natural language ("every weekday at 9am") → cron jobs that spawn tasks |
+| **Projects** | Group agents and sessions by project with assignment tracking |
+
+### Gateway Federation
+
+Run FCC across multiple teams or environments. Gateway mode proxies and aggregates:
+
+```
+Team A (FCC) ──┐
+Team B (FCC) ──┼── Gateway FCC ── Unified fleet view
+Team C (FCC) ──┘
+```
+
+Health checks, circuit breakers, HMAC-signed upstream communication.
 
 ---
 
@@ -43,146 +118,107 @@ node control-plane/server.js
 
 Open [http://localhost:3400](http://localhost:3400). Login: `admin` / `changeme`.
 
-That's it. No `npm install`. No build step. No Docker required.
-
-### With Docker
+No `npm install`. No build step. No Docker required. **Zero dependencies.**
 
 ```bash
+# Or with Docker
 docker compose up -d
-```
 
-### On Android (Termux)
-
-```bash
+# Or on Android
 bash termux/setup.sh
 ```
 
----
+### Enroll an Agent Node
 
-## Features
+```bash
+# On each machine running AI agents:
+cp config/node-agent.config.example.json node-agent.config.json
+# Set controlPlaneUrl and sharedSecret
+node node-agent/agent.js
+```
 
-### Core Platform
-- **Real-time SSE Feed** — Live event streaming with filters and auto-reconnect
-- **Session Replay** — Step-by-step digital twin replay with timeline scrubber
-- **Knowledge Graph** — Force-directed SVG visualization of agents, tools, and files
-- **Activity Heatmap** — 30-day contribution grid with streak tracking
-- **Gateway Federation** — Proxy and aggregate across multiple FCC instances
-- **Natural Language Scheduler** — "every monday at 9am" → cron jobs
-- **21-page SPA** — Glassmorphic dark theme, keyboard-first, works offline (PWA)
-
-### Security & Governance
-- **Zero-Trust Sandbox** — Command/path allowlists, symlink resolution, no remote shell
-- **Intent Contracts** — Drift scoring across 5 factors with enforcement ladders
-- **Policy Engine** — ABAC conditions (env, time windows, risk scores, node tags)
-- **Secret Scanner** — 14+ patterns (AWS, GitHub, Stripe, JWT, PEM keys)
-- **Security Profiles** — Minimal / Standard / Strict enforcement presets
-- **Tripwires & Honeytokens** — Decoy secrets with auto-quarantine
-- **4-Eyes Approval** — Dual-approver workflow with self-approve prevention
-- **Evidence Export** — ZIP bundles with Ed25519 signatures for auditors
-
-### Fleet Operations
-- **Agent Tracker** — 7 agent types, heartbeat monitoring, stale detection
-- **Kanban Task Board** — 6-column board with enforced status transitions
-- **Webhooks** — HMAC-SHA256 signed delivery with circuit breaker
-- **Skills Hub** — Browse, install, and security-scan agent skills
-- **Agent Evaluations** — 4-layer scoring with quality gates and fleet scorecards
-- **Doctor Diagnostics** — 12 health checks with auto-fix
-- **Backup & Restore** — Timestamped backups with JSON manifests
-
-### Identity & Access
-- **PBKDF2** — 100K iterations, SHA-512
-- **TOTP MFA** — RFC 6238 with recovery codes
-- **RBAC** — Viewer / Operator / Auditor / Admin
-- **API Keys** — SHA-256 hashed, prefix-based revocation
-- **Session Rotation** — HttpOnly, SameSite cookies with configurable TTL
+The agent daemon discovers sessions, signs requests with HMAC, spools events offline, and auto-reconnects.
 
 ---
 
-## Supported Agents
+## Security Enforcement
 
-Works with **any** AI coding agent. Auto-discovers sessions from:
+FCC is not "security-aware" — it **enforces security by default**. See [SECURITY_ARCHITECTURE.md](SECURITY_ARCHITECTURE.md) for the full threat model.
 
-| | Agents |
-|-|--------|
-| **Major** | Claude Code, Codex CLI, GitHub Copilot, Cursor, Windsurf, Gemini Code Assist, Augment, Kiro, Amazon Q, Tabnine |
-| **Open Source** | Continue, OpenHands, Tabby, Goose, OpenCode, Cline, Aider |
-| **Custom** | Any agent via `discoveryPaths` config — no vendor lock-in |
+| Layer | What FCC Does |
+|-------|--------------|
+| **Identity** | PBKDF2 (100K iterations, SHA-512), TOTP MFA, recovery codes, API keys (SHA-256 hashed) |
+| **Authorization** | 4-role RBAC + ABAC conditions (environment, time window, risk score, node tags) |
+| **Agent Sandbox** | Command + path allowlists, symlink resolution, traversal prevention, no remote shell |
+| **Policy Engine** | Rule evaluation with drift scoring, enforcement ladders, and simulation lab |
+| **Secrets** | 14+ scanner patterns (AWS, GitHub, Stripe, JWT, PEM), auto-redaction in events |
+| **Transport** | HMAC-SHA256 request signing, nonce replay prevention, timing-safe comparison |
+| **Audit** | Append-only, hash-chained, Ed25519-signed — every action, every actor, every reason |
+| **Headers** | CSP nonces, HSTS, X-Frame-Options, rate limiting, 1MB body limit, ReDoS protection |
+
+### Security Profiles
+
+Three built-in enforcement levels:
+
+| Profile | Auth failures | File access violations | Policy violations |
+|---------|--------------|----------------------|-------------------|
+| **Minimal** | Log | Log | Log |
+| **Standard** | Alert | Alert + audit | Block |
+| **Strict** | Block + lockout | Block + quarantine | Block + kill |
+
+Custom profiles supported. Switch profiles per-environment without code changes.
 
 ---
 
 ## Architecture
 
 ```
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│  Web UI     │     │  CLI        │     │  Pocket PWA │
-│  (21 pages) │     │  (18 cmds)  │     │  (mobile)   │
-└──────┬──────┘     └──────┬──────┘     └──────┬──────┘
-       │                   │                   │
-       └───────────┬───────┴───────────────────┘
-                   │ HTTP / SSE
-          ┌────────┴────────┐
-          │  Control Plane  │
-          │  31 lib modules │
-          │  24 route files │
-          └────────┬────────┘
-                   │
-    ┌──────────────┼──────────────┐
-    │              │              │
-┌───┴───┐    ┌────┴────┐   ┌────┴────┐
-│ JSONL │    │ SQLite  │   │ Node    │
-│ Event │    │ Accel.  │   │ Agent   │
-│ Store │    │ (opt.)  │   │ Daemon  │
-└───────┘    └─────────┘   └─────────┘
+┌──────────┐  ┌──────────┐  ┌──────────┐
+│  Web UI  │  │   CLI    │  │  Mobile  │
+│ 21 pages │  │ 18 cmds  │  │   PWA    │
+└────┬─────┘  └────┬─────┘  └────┬─────┘
+     └──────┬──────┴──────────────┘
+            │ HTTP / SSE
+   ┌────────┴────────┐
+   │  Control Plane  │──── 31 modules, 24 route files
+   └────────┬────────┘
+            │
+  ┌─────────┼─────────┐
+  │         │         │
+┌─┴──┐  ┌──┴──┐  ┌──┴──────┐
+│JSONL│  │SQLite│  │Node     │
+│Store│  │Accel.│  │Agent    │
+│    │  │(opt.)│  │Daemon(s)│
+└────┘  └─────┘  └─────────┘
 ```
 
-**Data Layer:** Append-only JSONL files (tamper-evident source of truth) + optional SQLite acceleration (Node.js 22+). No external database required.
-
-**Crypto Stack:** PBKDF2 + TOTP + HMAC-SHA256 + Ed25519 + SHA-256 hash chains — all from `node:crypto`.
+- **Data**: Append-only JSONL (source of truth) + optional SQLite acceleration (Node.js 22+)
+- **Crypto**: PBKDF2 + TOTP + HMAC-SHA256 + Ed25519 + SHA-256 chains — all `node:crypto`
+- **Dependencies**: Zero. The entire stack — server, agent, UI, CLI, PWA — is pure Node.js stdlib
 
 ---
 
-## Zero Dependencies — Really
+## Zero Dependencies
 
 ```
 $ ls node_modules
 ls: node_modules: No such file or directory
-
-$ cat package.json | grep dependencies
-(nothing)
 ```
 
-The entire project — server, agent, UI, CLI, PWA — uses only Node.js built-in modules: `node:crypto`, `node:fs`, `node:http`, `node:https`, `node:sqlite`, `node:test`, `node:assert`.
-
-**Why?** Zero supply-chain risk. No CVEs from transitive deps. Air-gap deployable. Auditable by one person.
+No npm packages. No supply-chain risk. No CVEs from transitive deps. Air-gap deployable. **One person can audit the entire codebase.**
 
 ---
 
 ## Testing
 
-833 tests across 31 suites. Zero external test frameworks.
+833 tests. 31 suites. Zero external test frameworks.
 
 ```bash
-node test/run-all.js          # All unit tests
-node test/e2e-smoke.js        # Server integration tests
+node test/run-all.js          # Unit tests
+node test/e2e-smoke.js        # Integration tests
 ```
 
-| Suite | Tests | Suite | Tests |
-|-------|------:|-------|------:|
-| Auth | 34 | Webhooks | 33 |
-| Policy | 41 | Scheduler | 49 |
-| Evaluations | 42 | Secret Scanner | 40 |
-| Skills Hub | 40 | Gateway | 36 |
-| Agents | 34+6 | Doctor | 34 |
-| Channels | 33 | Onboarding | 33 |
-| Crypto | 27 | Events | 23 |
-| Users | 25 | Projects | 24 |
-| Knowledge Graph | 23 | Tenants | 23 |
-| Tasks | 32 | Config | 14 |
-| Intent | 24 | Updater | 19 |
-| Router | 21 | SQLite | 21 |
-| Sandbox | 18 | Middleware | 11 |
-| Receipts | 12 | ZIP | 11 |
-| Security Profiles | 29 | E2E Smoke | 12 |
+Covers: auth, crypto, sandbox, policy, events, intent, gateway, agents, channels, webhooks, scheduler, evaluations, skills, security profiles, secret scanner, knowledge graph, tenants, projects, config, doctor, updater, tasks, and more.
 
 ---
 
@@ -190,137 +226,46 @@ node test/e2e-smoke.js        # Server integration tests
 
 ```bash
 cp config/clawcc.config.example.json clawcc.config.json
-# Edit to taste, then:
 node control-plane/server.js
 ```
-
-Key settings:
 
 ```jsonc
 {
   "port": 3400,
   "mode": "local",                          // or "fleet"
-  "dataDir": "./data",
   "auth": {
     "defaultAdminPassword": "changeme",     // CHANGE THIS
-    "sessionSecret": "generate-a-32-byte-random-string"
+    "sessionSecret": "generate-32-bytes"
   },
   "gateway": { "enabled": false },          // Multi-fleet federation
   "multiTenant": { "enabled": false }       // Tenant isolation
 }
 ```
 
-Generate a secure session secret:
-```bash
-node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-```
-
 ---
 
-## Security
+## Production Checklist
 
-FCC is hardened by default. See [SECURITY_ARCHITECTURE.md](SECURITY_ARCHITECTURE.md) for the full threat model.
-
-| Layer | Controls |
-|-------|----------|
-| **Identity** | PBKDF2 (100K iter), TOTP MFA, recovery codes, API keys |
-| **Authorization** | RBAC (4 roles), ABAC conditions, step-up auth, 4-eyes approval |
-| **Transport** | HMAC-SHA256 request signing, nonce replay prevention, CORS |
-| **Data** | Append-only JSONL, SHA-256 hash chains, Ed25519 signatures |
-| **Headers** | CSP with nonces, HSTS, X-Frame-Options, Referrer-Policy |
-| **Input** | 1MB body limit, 64KB event limit, ReDoS protection, path traversal prevention |
-| **Secrets** | Automatic redaction in events, 14+ scanner patterns |
-| **Compliance** | SOC 2, ISO 27001, NIST CSF control mappings ([COMPLIANCE_PACK.md](COMPLIANCE_PACK.md)) |
-
-Report vulnerabilities via [GitHub Security Advisories](https://github.com/alokemajumder/FleetControlCenter/security/advisories). See [SECURITY.md](SECURITY.md).
+- [ ] Change the default admin password
+- [ ] Generate a strong session secret (`node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`)
+- [ ] Use HTTPS (directly or via reverse proxy)
+- [ ] Restrict CORS origins
+- [ ] Enable MFA for all admin accounts
+- [ ] Set security profile to `standard` or `strict`
+- [ ] Consider Tailscale for node-to-control-plane encryption
 
 ---
 
 ## CLI
 
 ```bash
-node cli/clawcc.js <command>
-
-# Key commands:
 node cli/clawcc.js status              # Fleet overview
-node cli/clawcc.js sessions            # List all sessions
-node cli/clawcc.js drift <sessionId>   # Check drift score
-node cli/clawcc.js kill <target>       # Emergency kill
-node cli/clawcc.js evidence <session>  # Export evidence ZIP
-node cli/clawcc.js keygen              # Generate Ed25519 keys
-node cli/clawcc.js verify-receipts     # Verify receipt chain
-```
-
----
-
-## Project Structure
-
-```
-FleetControlCenter/
-  control-plane/
-    server.js               Main server (31 modules, 24 route files)
-    lib/                    31 library modules
-    routes/                 24 route handlers
-    middleware/             Auth + security middleware
-  node-agent/               Agent daemon with offline spooling
-  ui/                       SPA (21 pages, glassmorphic dark theme)
-  cli/                      18 CLI commands
-  pocket/                   Mobile PWA with push notifications
-  test/                     833 tests across 31 suites
-  config/                   Example configurations
-  allowlists/               Command + path allowlists
-  policies/                 Default governance rules
-```
-
----
-
-## Deployment
-
-### Production Checklist
-
-- [ ] Change the default admin password
-- [ ] Generate a strong session secret
-- [ ] Use HTTPS (directly or via reverse proxy)
-- [ ] Restrict CORS origins to your domain
-- [ ] Enable MFA for all admin accounts
-- [ ] Consider Tailscale for node-to-control-plane encryption
-
-### Node Agent
-
-```bash
-# On each machine with AI agents:
-cp config/node-agent.config.example.json node-agent.config.json
-# Set controlPlaneUrl and sharedSecret
-node node-agent/agent.js
-```
-
----
-
-## Troubleshooting
-
-**Server won't start?**
-```bash
-node --version              # Must be >= 18
-lsof -i :3400               # Check port conflicts
-```
-
-**Agent can't connect?**
-```bash
-curl http://CONTROL_PLANE:3400/healthz    # Test connectivity
-```
-
-**MFA locked out?**
-Use a recovery code, or have another admin reset MFA via the API.
-
----
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md). All contributions welcome — features, tests, docs, bug reports.
-
-```bash
-# Run tests before submitting a PR
-node test/run-all.js && node test/e2e-smoke.js
+node cli/clawcc.js sessions            # List sessions across fleet
+node cli/clawcc.js drift <sessionId>   # Check intent drift score
+node cli/clawcc.js kill <target>       # Emergency kill (session/node/global)
+node cli/clawcc.js evidence <session>  # Export signed evidence ZIP
+node cli/clawcc.js keygen              # Generate Ed25519 key pair
+node cli/clawcc.js verify-receipts     # Verify receipt chain integrity
 ```
 
 ---
@@ -329,20 +274,30 @@ node test/run-all.js && node test/e2e-smoke.js
 
 - [ ] Egress URL allowlisting
 - [ ] Exportable session replay packs
-- [ ] Grafana/Prometheus metrics export
-- [ ] Plugin system for custom integrations
+- [ ] Grafana/Prometheus metrics bridge
+- [ ] Plugin system for custom enforcement actions
+
+---
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). Run tests before submitting:
+
+```bash
+node test/run-all.js && node test/e2e-smoke.js
+```
 
 ---
 
 ## License
 
-[MIT](LICENSE) -- use it however you want.
+[MIT](LICENSE)
 
 ---
 
 <div align="center">
 
-**Built for teams who run AI agents in production and need to sleep at night.**
+**Built for teams who run AI agents in production and refuse to fly blind.**
 
 [Report Bug](https://github.com/alokemajumder/FleetControlCenter/issues) | [Request Feature](https://github.com/alokemajumder/FleetControlCenter/issues) | [Security Advisory](https://github.com/alokemajumder/FleetControlCenter/security/advisories)
 
