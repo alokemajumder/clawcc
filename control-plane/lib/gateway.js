@@ -193,6 +193,13 @@ function createGateway(opts = {}) {
       timeout: opts.timeoutMs || DEFAULT_TIMEOUT_MS
     };
 
+    let callbackFired = false;
+    function safeCallback(result) {
+      if (callbackFired) return;
+      callbackFired = true;
+      callback(result);
+    }
+
     const req = transport.request(reqOpts, (res) => {
       const chunks = [];
       res.on('data', (chunk) => chunks.push(chunk));
@@ -204,17 +211,17 @@ function createGateway(opts = {}) {
         } catch {
           parsedBody = rawBody;
         }
-        callback({ status: res.statusCode, headers: res.headers, body: parsedBody });
+        safeCallback({ status: res.statusCode, headers: res.headers, body: parsedBody });
       });
     });
 
     req.on('timeout', () => {
       req.destroy();
-      callback({ error: 'Request timeout after ' + (opts.timeoutMs || DEFAULT_TIMEOUT_MS) + 'ms' });
+      safeCallback({ error: 'Request timeout after ' + (opts.timeoutMs || DEFAULT_TIMEOUT_MS) + 'ms' });
     });
 
     req.on('error', (err) => {
-      callback({ error: 'Request failed: ' + (err.message || String(err)) });
+      safeCallback({ error: 'Request failed: ' + (err.message || String(err)) });
     });
 
     if (bodyStr) req.write(bodyStr);

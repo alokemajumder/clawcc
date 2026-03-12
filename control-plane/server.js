@@ -818,6 +818,8 @@ function shutdown(signal) {
   try { scheduler.stop(); } catch { /* ignore */ }
   // Stop Claude Code file watcher
   try { claudeIntegration.stopWatching(); } catch { /* ignore */ }
+  // Flush project manager debounced writes
+  try { projectManager.destroy(); } catch { /* ignore */ }
   // Stop accepting new connections
   server.close(() => {
     console.log('Server closed.');

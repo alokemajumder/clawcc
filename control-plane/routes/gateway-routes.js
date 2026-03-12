@@ -98,7 +98,8 @@ function registerGatewayRoutes(router, config, modules) {
       audit.log({ actor: authResult.user.username, action: 'gateway.proxy', target: req.params.upstreamId, detail: method + ' ' + proxyPath });
       res.json(200, { success: true, upstream: req.params.upstreamId, result });
     } catch (err) {
-      res.error(502, 'Proxy error: ' + (err.message || String(err)));
+      console.error('Gateway proxy error:', err);
+      res.error(502, 'Proxy request failed');
     }
   });
 
@@ -118,7 +119,8 @@ function registerGatewayRoutes(router, config, modules) {
       }
       res.json(200, { success: true, nodes: allNodes, errors: aggregated.errors, total: aggregated.total });
     } catch (err) {
-      res.error(500, 'Aggregate error: ' + (err.message || String(err)));
+      console.error('Gateway aggregate error:', err);
+      res.error(500, 'Aggregate request failed');
     }
   });
 

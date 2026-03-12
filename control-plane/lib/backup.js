@@ -47,14 +47,20 @@ function createBackupManager(opts = {}) {
     };
   }
 
-  function copyDirRecursive(src, dest, manifest) {
+  const MAX_COPY_DEPTH = 10;
+
+  function copyDirRecursive(src, dest, manifest, depth) {
+    if (depth === undefined) depth = 0;
+    if (depth > MAX_COPY_DEPTH) return; // Prevent unbounded recursion
     fs.mkdirSync(dest, { recursive: true });
     const entries = fs.readdirSync(src, { withFileTypes: true });
     for (const entry of entries) {
       const srcPath = path.join(src, entry.name);
       const destPath = path.join(dest, entry.name);
+      // Skip symlinks to prevent loops
+      if (entry.isSymbolicLink && entry.isSymbolicLink()) continue;
       if (entry.isDirectory()) {
-        copyDirRecursive(srcPath, destPath, manifest);
+        copyDirRecursive(srcPath, destPath, manifest, depth + 1);
       } else if (entry.isFile()) {
         const content = fs.readFileSync(srcPath);
         fs.writeFileSync(destPath, content);

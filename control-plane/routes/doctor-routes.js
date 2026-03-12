@@ -66,7 +66,7 @@ function registerDoctorRoutes(router, config, modules) {
     if (result.success) {
       res.json(200, { success: true, restore: result });
     } else {
-      res.json(400, { success: false, error: result.message });
+      res.json(500, { success: false, error: result.message });
     }
   });
 
@@ -81,7 +81,7 @@ function registerDoctorRoutes(router, config, modules) {
     if (result.success) {
       res.json(200, { success: true, message: result.message });
     } else {
-      res.json(400, { success: false, error: result.message });
+      res.json(500, { success: false, error: result.message });
     }
   });
 }

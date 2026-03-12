@@ -84,7 +84,10 @@ function createSecretScanner(opts = {}) {
         // Create a fresh regex for each line to reset lastIndex
         const re = new RegExp(pat.regex.source, pat.regex.flags + (pat.regex.flags.includes('g') ? '' : 'g'));
         let m;
+        let matchSafety = 0;
+        const MAX_MATCHES_PER_LINE = 1000;
         while ((m = re.exec(line)) !== null) {
+          if (++matchSafety > MAX_MATCHES_PER_LINE) break; // Safety: prevent infinite loops
           const matchStr = m[0];
           const masked = matchStr.substring(0, 8) + '***';
           findings.push({
@@ -97,7 +100,7 @@ function createSecretScanner(opts = {}) {
           secretsFound++;
           byPattern[pat.name] = (byPattern[pat.name] || 0) + 1;
           // Avoid infinite loop on zero-length match
-          if (m[0].length === 0) re.lastIndex++;
+          if (m[0].length === 0) { re.lastIndex++; if (re.lastIndex > line.length) break; }
         }
       }
     }

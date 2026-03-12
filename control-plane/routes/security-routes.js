@@ -153,7 +153,11 @@ function registerSecurityRoutes(router, config, modules) {
     try {
       // Convert regex string to RegExp
       if (body.regex && typeof body.regex === 'string') {
-        body.regex = new RegExp(body.regex, body.flags || '');
+        try {
+          body.regex = new RegExp(body.regex, body.flags || '');
+        } catch (regexErr) {
+          return res.error(400, 'Invalid regex pattern: ' + regexErr.message);
+        }
       }
       const pattern = secretScanner.addPattern(body);
       audit.log({ actor: authResult.user.username, action: 'security.pattern.added', target: body.name });

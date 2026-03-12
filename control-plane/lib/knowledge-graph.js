@@ -51,15 +51,32 @@ function createKnowledgeGraph(opts = {}) {
   function _evictOldestNodes(count) {
     const sorted = [...nodes.values()].sort((a, b) => a.createdAt - b.createdAt);
     for (let i = 0; i < count && i < sorted.length; i++) {
-      removeNode(sorted[i].id);
+      const id = sorted[i].id;
+      // Remove edges connected to this node without persisting each time
+      const edgeIds = adjacency.get(id);
+      if (edgeIds) {
+        for (const eid of [...edgeIds]) {
+          const edge = edges.get(eid);
+          if (edge) {
+            _removeAdjacency(edge);
+            edges.delete(eid);
+          }
+        }
+      }
+      adjacency.delete(id);
+      nodes.delete(id);
     }
+    _persist(); // Single persist after batch eviction
   }
 
   function _evictOldestEdges(count) {
     const sorted = [...edges.values()].sort((a, b) => a.createdAt - b.createdAt);
     for (let i = 0; i < count && i < sorted.length; i++) {
-      removeEdge(sorted[i].id);
+      const edge = sorted[i];
+      _removeAdjacency(edge);
+      edges.delete(edge.id);
     }
+    _persist(); // Single persist after batch eviction
   }
 
   function _persist() {

@@ -25,8 +25,12 @@ function compareSemver(a, b) {
 /**
  * Make an HTTP(S) GET request and return the response body as a string.
  */
-function httpGet(url, timeoutMs = 10000) {
+function httpGet(url, timeoutMs = 10000, _redirectCount = 0) {
+  const MAX_REDIRECTS = 5;
   return new Promise((resolve, reject) => {
+    if (_redirectCount >= MAX_REDIRECTS) {
+      return reject(new Error('Too many redirects (max ' + MAX_REDIRECTS + ')'));
+    }
     const parsed = new URL(url);
     const mod = parsed.protocol === 'https:' ? https : http;
     const req = mod.get(url, {
@@ -34,8 +38,8 @@ function httpGet(url, timeoutMs = 10000) {
       timeout: timeoutMs
     }, (res) => {
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        // Follow redirect
-        httpGet(res.headers.location, timeoutMs).then(resolve, reject);
+        // Follow redirect with counter
+        httpGet(res.headers.location, timeoutMs, _redirectCount + 1).then(resolve, reject);
         return;
       }
       let data = '';
