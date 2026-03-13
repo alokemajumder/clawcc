@@ -126,7 +126,8 @@ async function renderFleetPage() {
 async function loadFleetData() {
   try {
     const nodes = await API.getNodes();
-    const list = nodes.nodes || nodes || [];
+    const raw = nodes.nodes || nodes || [];
+    const list = Array.isArray(raw) ? raw : Object.entries(raw).map(([id, n]) => ({ id, ...n }));
     const online = list.filter(n => (n.status || '').toLowerCase() === 'online').length;
 
     document.getElementById('fleet-stats').innerHTML = `
