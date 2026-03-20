@@ -279,7 +279,7 @@ All HTTP responses include the following headers, applied via `control-plane/mid
 
 | Header | Value |
 | --- | --- |
-| `Content-Security-Policy` | `default-src 'self'; script-src 'self' 'nonce-<random>'; style-src 'self' 'nonce-<random>'; img-src 'self' data:; connect-src 'self'; font-src 'self'` |
+| `Content-Security-Policy` | `default-src 'self'; script-src 'self' 'nonce-<random>'; style-src 'self' 'nonce-<random>'; style-src-attr 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; frame-ancestors 'none'` |
 | `Strict-Transport-Security` | `max-age=31536000; includeSubDomains` (HTTPS only) |
 | `X-Content-Type-Options` | `nosniff` |
 | `X-Frame-Options` | `DENY` |
@@ -414,7 +414,7 @@ All in-memory collections are bounded to prevent out-of-memory conditions:
 | Regex cache | `policy.js` | 1K patterns | Oldest evicted (FIFO) |
 | Canary deployments | `server.js` | 100 entries | Expired entries evicted on insert |
 | Approval requests | `governance-routes.js` | 1K entries | Expired/completed entries evicted on insert |
-| Pending commands | `fleet-routes.js` | 50 per node | Rejected at capacity; empty nodes evicted |
+| Pending commands | `fleet-commands.js` | 500 global, 50 per node | Rejected at capacity; empty nodes evicted |
 | Auth rate limits | `security.js` | 10K IPs | Expired entries evicted on insert |
 | Push subscriptions | `ops-routes.js` | 1K entries | Rejected at capacity |
 | Health history | `ops-routes.js` | 17,280 entries | Oldest evicted (24 hours at 5-second intervals) |

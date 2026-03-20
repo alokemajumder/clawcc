@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 
-const SUPPORTED_AGENT_TYPES = new Set(['claude', 'codex', 'hermes', 'openclaw', 'nemoclaw', 'openshell', 'nemotron', 'cursor', 'copilot', 'codeium', 'gemini', 'augment', 'kiro', 'amazonq', 'tabnine', 'continue', 'openhands', 'tabby', 'goose', 'opencode', 'cline', 'custom']);
+const SUPPORTED_AGENT_TYPES = new Set(['claude', 'codex', 'hermes', 'openclaw', 'zeroclaw', 'nemoclaw', 'openshell', 'nemotron', 'cursor', 'copilot', 'codeium', 'gemini', 'augment', 'kiro', 'amazonq', 'tabnine', 'continue', 'openhands', 'tabby', 'goose', 'opencode', 'cline', 'custom']);
 const VALID_STATUSES = new Set(['active', 'idle', 'offline', 'error']);
 const DEFAULT_STALE_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
 const DEBOUNCE_MS = 5000;

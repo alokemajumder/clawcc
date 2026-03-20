@@ -43,7 +43,7 @@ All evidence is stored in append-only, hash-chained formats with Ed25519 digital
 | A.12.4  | Logging and monitoring                   | Append-only audit with hash chains, event store with async write queue, SSE streaming                                   | JSONL files, SSE endpoint               |
 | A.12.6  | Technical vulnerability management       | Path sandbox with symlink resolution, input validation, ReDoS protection, CSP nonces                                   | Sandbox module, middleware              |
 | A.13.1  | Network security                         | Tailscale WireGuard, HMAC signing with nonce replay prevention, CORS restrictions                                       | Agent configuration, middleware         |
-| A.14.2  | Security in development                  | Zero external dependencies, stdlib-only crypto, 234 tests across 11 suites, agent-agnostic design                      | No `node_modules`, test results         |
+| A.14.2  | Security in development                  | Zero external dependencies, stdlib-only crypto, 833 tests across 31 suites, agent-agnostic design                      | No `node_modules`, test results         |
 | A.16.1  | Incident management                      | Kill switch (3 levels), tripwire auto-quarantine, evidence export (ZIP)                                                 | Kill events, evidence bundles           |
 | A.18.1  | Compliance                               | This document, evidence inventory, receipt chain verification tooling                                                   | `COMPLIANCE_PACK.md`                    |
 

@@ -285,7 +285,7 @@ node cli/clawcc.js verify-receipts     # Verify receipt chain integrity
 
 ## Supported Agent Models
 
-FCC tracks usage and enforces policy across **16 providers** and **30+ models**:
+FCC tracks usage and enforces policy across **16 providers** and **30 models**:
 
 | Provider | Models |
 |----------|--------|
@@ -296,6 +296,7 @@ FCC tracks usage and enforces policy across **16 providers** and **30+ models**:
 | Cursor | `cursor-fast`, `cursor-slow` |
 | Codeium/Windsurf | `windsurf-cascade`, `codeium-autocomplete` |
 | Amazon Q | `amazon-q-developer`, `amazon-q-transform` |
+| ZeroClaw | `zeroclaw-rust-v1` |
 | [NemoClaw](https://build.nvidia.com/nemoclaw) | `nemoclaw-enterprise`, `nemoclaw-lite` |
 | [OpenShell](https://docs.nvidia.com/openshell/latest/index.html) | `openshell-runtime`, `openshell-sandbox` |
 | [Nemotron](https://developer.nvidia.com/nemotron) | `nemotron-nano-30b`, `nemotron-super-120b`, `nemotron-ultra-253b` |
